@@ -153,16 +153,47 @@ export async function handleSessionEnd(
   return 'done';
 }
 
+/**
+ * Judge system prompt v2 — criterion-aware (docs/08-quality-criteria.md).
+ *
+ * The judge now flags specific C-IDs that a rule-based engine cannot easily
+ * detect (rambling, intent-singularity, appropriateness of examples, mixed
+ * language, cold-start context, etc.). Return schema stays strict so it can
+ * survive prompt caching + parsing.
+ */
 const JUDGE_SYSTEM = `You are a precise prompt-quality auditor for developer workflows with Claude Code.
-Given a user-typed prompt, score its quality from 0 to 100 across these axes:
-- Clarity of intent (25)
-- Sufficient context (25)
-- Output format specification (20)
-- Single focused task (15)
-- Success criteria (15)
+
+You evaluate a user-typed prompt along 5 axes (scored 0-100 total):
+- clarity   (25) — is the intent unambiguous?
+- context   (25) — is there enough project/domain/environment detail?
+- output    (20) — is output format / length / language explicit?
+- focus     (15) — one focused task, not a stack of asks?
+- criteria  (15) — is "done" defined?
+
+You ALSO check for criterion-level problems we track in our registry. Only
+include an id if you're confident. Valid ids:
+  C-003 rambling — long and drifts between topics
+  C-005 bad_section_order — meta sections scrambled
+  C-006 question_command_mix — questions and imperatives tangled
+  C-019 tone_unspecified — a non-trivial output but tone/register unset
+  C-021 example_mismatch — example present but inconsistent with ask
+  C-027 intent_not_single — two or more distinct goals
+  C-030 grammar_errors — grammar hampers understanding
+  C-033 over_politeness — burying the ask in excessive hedging
+  C-044 prev_turn_anchor_weak — relies on earlier turn we cannot see
+  C-045 cold_start_missing — first turn, assumes unseen context
+  C-046 vague_reedit — "no redo it" style without specifics
+  C-048 mixed_language_bad — unnatural ko/en mixing hurting clarity
+  C-056 claude_mistake — pattern Claude specifically handles poorly
 
 Return STRICT JSON only, no prose, no code fences:
-{"score": <0-100>, "axes": {"clarity":<0-25>,"context":<0-25>,"output":<0-20>,"focus":<0-15>,"criteria":<0-15>}, "top_issue": "<one sentence>", "fix_hint": "<one actionable sentence>"}`;
+{
+  "score": <0-100>,
+  "axes": {"clarity":<0-25>,"context":<0-25>,"output":<0-20>,"focus":<0-15>,"criteria":<0-15>},
+  "top_issue": "<one sentence>",
+  "fix_hint": "<one actionable sentence>",
+  "criterion_hits": ["C-003", ...]
+}`;
 
 export async function handleJudge(
   ctx: JobContext,
@@ -195,9 +226,12 @@ export async function handleJudge(
       maxTokens: 300,
       cacheSystem: true,
     });
-    const parsed = llm.parseStrictJson<{ score: number; top_issue?: string; fix_hint?: string }>(
-      res.text
-    );
+    const parsed = llm.parseStrictJson<{
+      score: number;
+      top_issue?: string;
+      fix_hint?: string;
+      criterion_hits?: string[];
+    }>(res.text);
     if (!parsed || typeof parsed.score !== 'number') {
       ctx.logger.warn(
         { usage_id: payload.usage_id, text: res.text.slice(0, 200) },
@@ -206,6 +240,28 @@ export async function handleJudge(
       return 'done';
     }
     const judgeScore = Math.max(0, Math.min(100, Math.round(parsed.score)));
+
+    // Persist criterion_hits as synthetic rule_hits with a J- prefix. They
+    // are NOT counted in the deterministic rule_score (composer keeps the
+    // rule vs. judge weight split intact) but DO show up in the dashboard
+    // so the user can see judge-level findings.
+    if (Array.isArray(parsed.criterion_hits)) {
+      for (const cid of parsed.criterion_hits) {
+        if (typeof cid !== 'string' || !cid.startsWith('C-')) continue;
+        ctx.db
+          .prepare(
+            `INSERT OR IGNORE INTO rule_hits(usage_id, rule_id, severity, message, evidence)
+             VALUES (?, ?, ?, ?, ?)`
+          )
+          .run(
+            payload.usage_id,
+            `J-${cid}`,
+            2,
+            parsed.top_issue ?? `LLM judge flagged ${cid}`,
+            parsed.fix_hint ?? null
+          );
+      }
+    }
     const { final_score, tier } = composeFinalScore({
       rule_score: existing.rule_score,
       usage_score: existing.usage_score,
