@@ -30,7 +30,7 @@ afterEach(() => {
 describe('db', () => {
   it('initializes schema and meta', () => {
     const db = openDb(tmp);
-    expect(getMeta(db, 'schema_version')).toBe('1');
+    expect(getMeta(db, 'schema_version')).toBe('2');
     expect(getMeta(db, 'rules_version')).toBe('1');
     db.close();
   });

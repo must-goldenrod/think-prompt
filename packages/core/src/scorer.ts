@@ -29,10 +29,15 @@ export interface UsageMetrics {
   reuseCount: number; // how many times this prompt_hash seen before in same session
   responseLength: number;
   expectedResponseRange?: { min: number; max: number };
+  feedbackUps?: number;
+  feedbackDowns?: number;
 }
 
 export function computeUsageScore(m: UsageMetrics): number | null {
-  if (m.toolCalls === 0 && m.responseLength === 0 && m.reuseCount === 0) return null;
+  const hasFeedback = (m.feedbackUps ?? 0) + (m.feedbackDowns ?? 0) > 0;
+  if (m.toolCalls === 0 && m.responseLength === 0 && m.reuseCount === 0 && !hasFeedback) {
+    return null;
+  }
   // Fail rate (35%)
   const failRate = m.toolCalls > 0 ? m.toolFails / m.toolCalls : 0;
   const failScore = (1 - failRate) * 100;
@@ -48,9 +53,17 @@ export function computeUsageScore(m: UsageMetrics): number | null {
       lengthScore = Math.max(0, 100 - ((min - m.responseLength) / min) * 100);
     else lengthScore = Math.max(0, 100 - ((m.responseLength - max) / max) * 100);
   }
-  const raw = 0.35 * failScore + 0.25 * reuseScore + 0.15 * lengthScore;
-  // Normalize to 0–100 given the 0.75 total weight represented here
-  return Math.round(raw / 0.75);
+  // User feedback (25%) — present only when at least one rating exists.
+  let totalWeight = 0.75;
+  let raw = 0.35 * failScore + 0.25 * reuseScore + 0.15 * lengthScore;
+  if (hasFeedback) {
+    const ups = m.feedbackUps ?? 0;
+    const downs = m.feedbackDowns ?? 0;
+    const fbScore = (ups / (ups + downs)) * 100;
+    raw += 0.25 * fbScore;
+    totalWeight = 1.0;
+  }
+  return Math.round(raw / totalWeight);
 }
 
 export interface ScoreComposition {

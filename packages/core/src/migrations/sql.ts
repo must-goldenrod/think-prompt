@@ -1,6 +1,9 @@
 // Inline SQL migrations so they don't rely on files being copied to dist/.
-// Kept in sync with src/migrations/001_init.sql.
+// Kept in sync with src/migrations/NNN_*.sql.
 
+/**
+ * v1 schema. Additive changes must go into their own MIGRATION_NNN constant.
+ */
 export const MIGRATION_001: string = `
 CREATE TABLE IF NOT EXISTS _meta (
   key   TEXT PRIMARY KEY,
@@ -128,4 +131,23 @@ CREATE TABLE IF NOT EXISTS audit (
 INSERT OR IGNORE INTO _meta(key, value) VALUES
   ('schema_version', '1'),
   ('rules_version', '1');
+`;
+
+/**
+ * v0.1.2 schema additions:
+ *   - prompt_usages.detected_language (TEXT)
+ *   - outcomes table for user feedback (Stage 5)
+ */
+export const MIGRATION_002: string = `
+ALTER TABLE prompt_usages ADD COLUMN detected_language TEXT;
+
+CREATE TABLE IF NOT EXISTS outcomes (
+  id          TEXT PRIMARY KEY,
+  usage_id    TEXT NOT NULL REFERENCES prompt_usages(id),
+  rating      TEXT NOT NULL,               -- 'up' | 'down'
+  note        TEXT,
+  created_at  DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_outcomes_usage ON outcomes(usage_id);
+CREATE INDEX IF NOT EXISTS idx_outcomes_rating ON outcomes(rating);
 `;

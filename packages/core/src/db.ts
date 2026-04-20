@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import Database, { type Database as Db } from 'better-sqlite3';
-import { MIGRATION_001 } from './migrations/sql.js';
+import { detectLanguage } from './lang.js';
+import { MIGRATION_001, MIGRATION_002 } from './migrations/sql.js';
 import { getPaths } from './paths.js';
 import { maskPii } from './pii.js';
 import { ulid } from './ulid.js';
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 export function openDb(rootOverride?: string): Db {
   const paths = getPaths(rootOverride);
@@ -29,7 +30,10 @@ function runMigrations(db: Db): void {
     | { value: string }
     | undefined;
   const current = row ? Number.parseInt(row.value, 10) : 0;
-  const migrations: Array<{ v: number; sql: string }> = [{ v: 1, sql: MIGRATION_001 }];
+  const migrations: Array<{ v: number; sql: string }> = [
+    { v: 1, sql: MIGRATION_001 },
+    { v: 2, sql: MIGRATION_002 },
+  ];
   for (const m of migrations) {
     if (m.v <= current) continue;
     db.transaction(() => {
@@ -74,6 +78,7 @@ export interface PromptUsageRow {
   created_at: string;
   turn_index: number;
   coach_context: string | null;
+  detected_language: string | null;
 }
 
 export function upsertSession(
@@ -135,11 +140,13 @@ export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): Prompt
     turnIndex = row.max_ti + 1;
   }
 
+  const language = detectLanguage(input.prompt_text);
+
   db.prepare(
     `INSERT INTO prompt_usages(id, session_id, prompt_text, prompt_hash, pii_masked, pii_hits,
-                                char_len, word_count, created_at, turn_index, coach_context)
+                                char_len, word_count, created_at, turn_index, coach_context, detected_language)
      VALUES (@id,@session_id,@prompt_text,@prompt_hash,@pii_masked,@pii_hits,
-             @char_len,@word_count,@created_at,@turn_index,@coach_context)`
+             @char_len,@word_count,@created_at,@turn_index,@coach_context,@detected_language)`
   ).run({
     id,
     session_id: input.session_id,
@@ -152,6 +159,7 @@ export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): Prompt
     created_at: createdAt,
     turn_index: turnIndex,
     coach_context: input.coach_context ?? null,
+    detected_language: language,
   });
 
   return {
@@ -166,6 +174,7 @@ export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): Prompt
     created_at: createdAt,
     turn_index: turnIndex,
     coach_context: input.coach_context ?? null,
+    detected_language: language,
   };
 }
 
@@ -327,4 +336,47 @@ export function getMeta(db: Db, key: string): string | null {
 
 export function setMeta(db: Db, key: string, value: string): void {
   db.prepare(`INSERT OR REPLACE INTO _meta(key,value) VALUES (?,?)`).run(key, value);
+}
+
+// --- User feedback (C-044 / C-047 / usage_score input) ---
+
+export type OutcomeRating = 'up' | 'down';
+
+export interface OutcomeRow {
+  id: string;
+  usage_id: string;
+  rating: OutcomeRating;
+  note: string | null;
+  created_at: string;
+}
+
+export function recordOutcome(
+  db: Db,
+  usage_id: string,
+  rating: OutcomeRating,
+  note?: string | null
+): OutcomeRow {
+  const id = ulid();
+  const created_at = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO outcomes(id, usage_id, rating, note, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(id, usage_id, rating, note ?? null, created_at);
+  return { id, usage_id, rating, note: note ?? null, created_at };
+}
+
+/**
+ * Aggregates feedback for a prompt into {ups, downs}. Used by the scorer
+ * when computing usage_score for the 0.25 feedback weight.
+ */
+export function getOutcomeTotals(db: Db, usage_id: string): { ups: number; downs: number } {
+  const row = db
+    .prepare(
+      `SELECT
+          SUM(CASE WHEN rating='up'   THEN 1 ELSE 0 END) AS ups,
+          SUM(CASE WHEN rating='down' THEN 1 ELSE 0 END) AS downs
+         FROM outcomes WHERE usage_id = ?`
+    )
+    .get(usage_id) as { ups: number | null; downs: number | null };
+  return { ups: row.ups ?? 0, downs: row.downs ?? 0 };
 }

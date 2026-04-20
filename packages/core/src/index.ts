@@ -3,6 +3,7 @@ export * from './ulid.js';
 export * from './logger.js';
 export * from './config.js';
 export * from './pii.js';
+export * from './lang.js';
 export * from './schema.js';
 export * from './db.js';
 export * from './scorer.js';
