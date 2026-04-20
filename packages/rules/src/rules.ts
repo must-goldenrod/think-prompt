@@ -1,15 +1,22 @@
 import {
+  ABSTRACT_CODE_REFERENCE,
   AMBIGUOUS_ADVERBS,
   AMBIGUOUS_PRONOUN_STARTS,
   CONTEXT_KEYWORDS,
+  DEBUG_INTENT_KEYWORDS,
+  ERROR_MESSAGE_PATTERNS,
   EXAMPLE_KEYWORDS,
+  FILE_PATH_PATTERNS,
   FORMAT_KEYWORDS,
   IMPERATIVE_KEYWORDS,
   INJECTION_PATTERNS,
   OUTPUT_CONSTRAINT_KEYWORDS,
+  PRIOR_ATTEMPT_KEYWORDS,
   QUESTION_MARKERS,
   SUCCESS_CRITERIA_KEYWORDS,
   TASK_SEPARATOR_PATTERNS,
+  VERSION_PATTERNS,
+  VERSION_SENSITIVE_TECH,
   anyMatch,
 } from './keywords.js';
 import type { Rule } from './types.js';
@@ -330,6 +337,88 @@ export const r014: Rule = {
   },
 };
 
+// R015 — missing "what I already tried" for debugging asks (C-011)
+export const r015: Rule = {
+  id: 'R015',
+  name: 'no_prior_attempt',
+  category: 'context',
+  description: 'Debug-intent prompt lacks description of what was already tried.',
+  severity: 2,
+  detect: ({ promptText, meta }) => {
+    // Korean prompts naturally tokenize to fewer whitespace-separated words,
+    // so the threshold is lower than it would be for English.
+    if (meta.wordCount < 8) return null;
+    if (!anyMatch(promptText, DEBUG_INTENT_KEYWORDS)) return null;
+    if (anyMatch(promptText, PRIOR_ATTEMPT_KEYWORDS)) return null;
+    return {
+      severity: 2,
+      message:
+        '디버깅 요청 같은데 "이미 시도한 것" 설명이 없습니다. "X 해봤는데 Y 에러" 식으로 한 줄 추가하면 모델이 같은 경로를 반복하지 않습니다.',
+      fixHint: 'add_prior_attempt',
+    };
+  },
+};
+
+// R016 — tech stack mentioned without a version (C-013)
+export const r016: Rule = {
+  id: 'R016',
+  name: 'no_version_spec',
+  category: 'context',
+  description: 'Version-sensitive tech mentioned but no version number.',
+  severity: 2,
+  detect: ({ promptText, meta }) => {
+    if (meta.wordCount < 10) return null;
+    if (!anyMatch(promptText, VERSION_SENSITIVE_TECH)) return null;
+    if (anyMatch(promptText, VERSION_PATTERNS)) return null;
+    return {
+      severity: 2,
+      message:
+        '버전 정보가 없습니다. Node 20 / Python 3.12 / React 19 같이 버전을 명시하면 API 차이로 인한 오답이 줄어듭니다.',
+      fixHint: 'add_version',
+    };
+  },
+};
+
+// R017 — debug intent but no error message included (C-015)
+export const r017: Rule = {
+  id: 'R017',
+  name: 'missing_error_message',
+  category: 'context',
+  description: 'Debug-intent prompt without an actual error message / stack trace.',
+  severity: 2,
+  detect: ({ promptText, meta }) => {
+    if (meta.wordCount < 6) return null;
+    if (!anyMatch(promptText, DEBUG_INTENT_KEYWORDS)) return null;
+    if (anyMatch(promptText, ERROR_MESSAGE_PATTERNS)) return null;
+    return {
+      severity: 2,
+      message:
+        '에러 메시지나 스택 트레이스가 없습니다. 실제 출력을 그대로 붙여넣으면 추측 대신 원인 기반 답을 얻을 수 있습니다.',
+      fixHint: 'paste_error',
+    };
+  },
+};
+
+// R018 — code reference without a concrete path (C-040)
+export const r018: Rule = {
+  id: 'R018',
+  name: 'no_file_path',
+  category: 'context',
+  description: 'Prompt references code abstractly ("이 함수/this class") without a path.',
+  severity: 1,
+  detect: ({ promptText, meta }) => {
+    if (meta.wordCount < 4) return null;
+    if (!anyMatch(promptText, ABSTRACT_CODE_REFERENCE)) return null;
+    if (anyMatch(promptText, FILE_PATH_PATTERNS)) return null;
+    return {
+      severity: 1,
+      message:
+        '"이 함수/this class" 같은 추상 지칭이 있는데 파일 경로가 없습니다. `src/db.ts` 같이 경로를 달면 모델이 Read 도구로 바로 확인할 수 있습니다.',
+      fixHint: 'add_file_path',
+    };
+  },
+};
+
 export const ALL_RULES: Rule[] = [
   r001,
   r002,
@@ -345,4 +434,8 @@ export const ALL_RULES: Rule[] = [
   r012,
   r013,
   r014,
+  r015,
+  r016,
+  r017,
+  r018,
 ];

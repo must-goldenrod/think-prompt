@@ -114,6 +114,81 @@ export const TASK_SEPARATOR_PATTERNS: RegExp[] = [
   /\s\/\s(?!\/)/g, // standalone slash, not part of //
 ];
 
+/**
+ * C-011 — prior-attempt markers. Presence of any of these suggests the user
+ * has already tried something, which is valuable context for debugging asks.
+ */
+export const PRIOR_ATTEMPT_KEYWORDS: RegExp[] = [
+  /\b(already\s+tried|i\s+tried|tried\s+to|attempted|did\s+not\s+work|didn't\s+work|doesn't\s+work)\b/i,
+  // Korean: any verb stem ending in "-봤-" (past attempt), plus explicit markers.
+  /봤(?:는데|지만|다|어|고|습니다|으나)/u,
+  /(시도해|돌려봤|실행해봤|테스트해봤|해도\s*안|했는데\s*여전히)/u,
+];
+
+/**
+ * C-011 — "I am stuck" / "debug this" intent signals. Combined with the
+ * absence of PRIOR_ATTEMPT_KEYWORDS, this triggers R015.
+ */
+export const DEBUG_INTENT_KEYWORDS: RegExp[] = [
+  /\b(debug|fix|broken|fail(?:s|ing|ed)?|error|crash(?:es|ed|ing)?|stuck|not\s+working)\b/i,
+  /(안돼|안\s*되는|안\s*됩|오류|에러|실패|깨졌|망가진|이상해)/u,
+];
+
+/**
+ * C-013 — version patterns. Presence indicates the user provided version
+ * info; absence combined with tech-stack mentions triggers R016.
+ */
+export const VERSION_PATTERNS: RegExp[] = [
+  /\bv?\d{1,3}(?:\.\d{1,3}){1,3}\b/, // e.g. 20.5.1, v3.4
+  /\b(?:node|python|ruby|go|rust|java|php|deno|bun)\s*@?\s*\d+/i,
+  /\b(\d{1,2})(?:\s+LTS|lts)\b/i,
+  /\d{4}[./-]\d{1,2}[./-]\d{1,2}/, // dates — sometimes used as pseudo-version
+];
+
+/**
+ * C-013 — technology names that are version-sensitive. If any of these
+ * appear AND no VERSION_PATTERN matches, R016 fires.
+ */
+export const VERSION_SENSITIVE_TECH: RegExp[] = [
+  /\b(node(?:\.?js)?|python|ruby|go(?:lang)?|rust|java|kotlin|swift|deno|bun)\b/i,
+  /\b(react|vue|svelte|nextjs|next\.js|nuxt|angular|solidjs)\b/i,
+  /\b(typescript|javascript|typescripts?)\b/i,
+  /\b(django|flask|fastapi|nestjs|express|rails|laravel|spring)\b/i,
+  /\b(postgres(?:ql)?|mysql|sqlite|mongodb|redis)\b/i,
+];
+
+/**
+ * C-015 — error-message patterns. If none match while DEBUG_INTENT_KEYWORDS
+ * is present, R017 fires ("you said it errors but didn't include the error").
+ */
+export const ERROR_MESSAGE_PATTERNS: RegExp[] = [
+  /\b(Error|Exception|TypeError|ValueError|SyntaxError|RangeError|ReferenceError|KeyError|IndexError|AttributeError|NullPointer|StackOverflow|Segmentation\s+fault|panic(?:ked)?)(:|\s+at|\s+in|\s*$)/,
+  /\btraceback\b/i,
+  /\b(E\d{2,5}|TS\d{4,5})\b/, // TS/rust/... error codes
+  /\b(ERR_[A-Z_]+|ENOENT|EACCES|EPERM|ECONNREFUSED)\b/, // node.js style
+  /(오류\s*(메시지|내용)?|에러\s*(메시지|코드)?\s*:|stack\s*trace)/iu,
+];
+
+/**
+ * C-040 — file-path-like tokens. Absence combined with "this file / this
+ * function / 이 함수" references triggers R018.
+ */
+export const FILE_PATH_PATTERNS: RegExp[] = [
+  /\b[\w.-]+\/[\w.-/]+\.(?:ts|tsx|js|jsx|py|rs|go|java|kt|rb|php|c|cc|cpp|h|hpp|sol|vue|svelte|md|yml|yaml|json|toml)\b/i,
+  /\.\/[\w.-/]+/, // relative paths
+  /`[\w.-]+\.[\w]+`/, // backticked filename
+];
+
+/**
+ * C-040 — prompt references a specific piece of code by abstract reference
+ * ("이 함수", "this class") without pointing to a file.
+ */
+export const ABSTRACT_CODE_REFERENCE: RegExp[] = [
+  /\b(this|the)\s+(function|class|module|file|component|method|hook|middleware|service)\b/i,
+  /(이|그|해당)\s*(함수|클래스|모듈|파일|컴포넌트|메서드|훅|미들웨어|서비스)/u,
+  /\b(위|아래)\s*(코드|함수)/u,
+];
+
 export function anyMatch(text: string, patterns: RegExp[]): RegExp | null {
   for (const re of patterns) {
     if (re.test(text)) return re;

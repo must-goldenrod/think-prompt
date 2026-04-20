@@ -15,8 +15,8 @@ function input(text: string, extra?: { piiHits?: Record<string, number> }): Dete
 }
 
 describe('rules', () => {
-  it('has 14 rules', () => {
-    expect(ALL_RULES).toHaveLength(14);
+  it('has 18 rules', () => {
+    expect(ALL_RULES).toHaveLength(18);
   });
 
   describe('R001 too_short', () => {
@@ -134,6 +134,62 @@ describe('rules', () => {
       const hits = runRules(input(good));
       const severe = hits.filter((h) => h.severity >= 3);
       expect(severe).toHaveLength(0);
+    });
+  });
+
+  describe('R015 no_prior_attempt', () => {
+    it('fires when debug intent but no attempt description', () => {
+      const hits = runRules(
+        input('이 React 컴포넌트가 렌더링 중에 계속 에러가 뜨고 안되는데 도와줘')
+      );
+      expect(hits.find((h) => h.ruleId === 'R015')).toBeTruthy();
+    });
+    it('does not fire when prior attempt mentioned', () => {
+      const hits = runRules(
+        input(
+          '이 React 컴포넌트가 에러가 뜨는데 useState 초기값을 바꿔봤지만 여전히 같은 에러가 납니다.'
+        )
+      );
+      expect(hits.find((h) => h.ruleId === 'R015')).toBeFalsy();
+    });
+  });
+
+  describe('R016 no_version_spec', () => {
+    it('fires when tech mentioned without version', () => {
+      const hits = runRules(
+        input('내 Node 프로젝트에서 async iterator 관련 이상한 동작이 있는데 봐줘')
+      );
+      expect(hits.find((h) => h.ruleId === 'R016')).toBeTruthy();
+    });
+    it('does not fire when version mentioned', () => {
+      const hits = runRules(
+        input('Node 20.5 에서 async iterator 관련 이상한 동작이 있는데 한번 분석해줘')
+      );
+      expect(hits.find((h) => h.ruleId === 'R016')).toBeFalsy();
+    });
+  });
+
+  describe('R017 missing_error_message', () => {
+    it('fires on debug intent without error message', () => {
+      const hits = runRules(input('빌드가 자꾸 실패하는데 왜 그런지 모르겠어요 좀 봐주세요'));
+      expect(hits.find((h) => h.ruleId === 'R017')).toBeTruthy();
+    });
+    it('does not fire when actual error text is included', () => {
+      const hits = runRules(
+        input('빌드가 실패합니다. TypeError: Cannot read properties of undefined (reading "x")')
+      );
+      expect(hits.find((h) => h.ruleId === 'R017')).toBeFalsy();
+    });
+  });
+
+  describe('R018 no_file_path', () => {
+    it('fires on abstract code reference without a path', () => {
+      const hits = runRules(input('이 함수 리팩터해줘 좀 깔끔하게'));
+      expect(hits.find((h) => h.ruleId === 'R018')).toBeTruthy();
+    });
+    it('does not fire when path is supplied', () => {
+      const hits = runRules(input('src/db.ts 의 insertPromptUsage 함수 리팩터해줘'));
+      expect(hits.find((h) => h.ruleId === 'R018')).toBeFalsy();
     });
   });
 
