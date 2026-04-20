@@ -20,7 +20,7 @@
     "@pro-prompt/dashboard": "workspace:*",
     "@pro-prompt/rules": "workspace:*",
     "@pro-prompt/worker": "workspace:*",
-    "commander": "^12.1.0",
+    "commander": "^14.0.3",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
