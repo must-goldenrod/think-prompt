@@ -1,6 +1,6 @@
 /**
  * Template for Claude Code settings.json hook block.
- * Installed/removed by `pro-prompt install` / `uninstall`.
+ * Installed/removed by `think-prompt install` / `uninstall`.
  */
 
 export interface HookBlock {
@@ -35,7 +35,7 @@ export const HOOK_KEYS = [
 
 /**
  * A hook block in the claude settings.json is "ours" if any of its hooks
- * points at the pro-prompt agent URL.
+ * points at the think-prompt agent URL.
  */
 export function isOurHookBlock(block: any): boolean {
   if (!block || !Array.isArray(block.hooks)) return false;

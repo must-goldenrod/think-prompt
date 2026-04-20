@@ -1,4 +1,4 @@
-# Pro-Prompt v0.1.0 — 빌드 리포트
+# Think-Prompt v0.1.0 — 빌드 리포트
 
 **세션 날짜:** 2026-04-20
 **상태:** 전 기능 구현 완료 · CI 전 단계 통과 · 스모크 테스트 통과
@@ -17,12 +17,12 @@
 
 | 패키지 | 역할 | 빌드 산출물 |
 |---|---|---|
-| `@pro-prompt/core` | SQLite DB · 설정 · 로거 · PII · 스코어러 · 큐 · 트랜스크립트 파서 · Anthropic 클라이언트 | `dist/index.js` (24 KB), `dist/db.js`, `dist/transcript/parser.js` |
-| `@pro-prompt/rules` | 안티패턴 룰 R001~R012 + 카탈로그 | `dist/index.js` (9.9 KB) |
-| `@pro-prompt/agent` | Fastify HTTP 훅 수신기(6개 엔드포인트) | `dist/index.js` (8.5 KB) bin: `pro-prompt-agent` |
-| `@pro-prompt/worker` | 큐 소비 데몬 — 트랜스크립트 파싱 · LLM 심판 · 리라이터 | `dist/index.js` (11.8 KB) bin: `pro-prompt-worker` |
-| `@pro-prompt/dashboard` | 로컬 웹 UI (Fastify + Tailwind CDN + htmx) | `dist/index.js` (21.4 KB) bin: `pro-prompt-dashboard` |
-| `@pro-prompt/cli` | 18개 서브커맨드 (install/start/doctor/list/rewrite …) | `dist/index.js` (28.2 KB) bin: `pro-prompt` |
+| `@think-prompt/core` | SQLite DB · 설정 · 로거 · PII · 스코어러 · 큐 · 트랜스크립트 파서 · Anthropic 클라이언트 | `dist/index.js` (24 KB), `dist/db.js`, `dist/transcript/parser.js` |
+| `@think-prompt/rules` | 안티패턴 룰 R001~R012 + 카탈로그 | `dist/index.js` (9.9 KB) |
+| `@think-prompt/agent` | Fastify HTTP 훅 수신기(6개 엔드포인트) | `dist/index.js` (8.5 KB) bin: `think-prompt-agent` |
+| `@think-prompt/worker` | 큐 소비 데몬 — 트랜스크립트 파싱 · LLM 심판 · 리라이터 | `dist/index.js` (11.8 KB) bin: `think-prompt-worker` |
+| `@think-prompt/dashboard` | 로컬 웹 UI (Fastify + Tailwind CDN + htmx) | `dist/index.js` (21.4 KB) bin: `think-prompt-dashboard` |
+| `@think-prompt/cli` | 18개 서브커맨드 (install/start/doctor/list/rewrite …) | `dist/index.js` (28.2 KB) bin: `think-prompt` |
 
 **구조:** `pnpm` workspace · TypeScript strict + exactOptionalPropertyTypes · ESM.
 
@@ -40,15 +40,15 @@ packages/dashboard typecheck: Done
 packages/cli typecheck: Done
 
 === test ===
- ✓ @pro-prompt/core   test/parser.test.ts    (7 tests)
- ✓ @pro-prompt/core   test/scorer.test.ts    (9 tests)
- ✓ @pro-prompt/core   test/pii.test.ts       (7 tests)
- ✓ @pro-prompt/core   test/db.test.ts        (4 tests)
- ✓ @pro-prompt/rules  test/rules.test.ts     (11 tests)
- ✓ @pro-prompt/agent  test/server.test.ts    (4 tests)
- ✓ @pro-prompt/worker test/jobs.test.ts      (3 tests)
- ✓ @pro-prompt/dashboard test/server.test.ts (3 tests)
- ✓ @pro-prompt/cli    test/settings-merge.test.ts (5 tests)
+ ✓ @think-prompt/core   test/parser.test.ts    (7 tests)
+ ✓ @think-prompt/core   test/scorer.test.ts    (9 tests)
+ ✓ @think-prompt/core   test/pii.test.ts       (7 tests)
+ ✓ @think-prompt/core   test/db.test.ts        (4 tests)
+ ✓ @think-prompt/rules  test/rules.test.ts     (11 tests)
+ ✓ @think-prompt/agent  test/server.test.ts    (4 tests)
+ ✓ @think-prompt/worker test/jobs.test.ts      (3 tests)
+ ✓ @think-prompt/dashboard test/server.test.ts (3 tests)
+ ✓ @think-prompt/cli    test/settings-merge.test.ts (5 tests)
  Test Files  9 passed | Tests  53 passed
 
 === lint (biome) ===
@@ -77,8 +77,8 @@ cd /Users/mufin/projects/think-prompt
 
 # 격리된 가상 HOME
 TMP=$(mktemp -d)
-export PRO_PROMPT_HOME="$TMP/pro-prompt"
-export PRO_PROMPT_CLAUDE_SETTINGS="$TMP/claude-settings.json"
+export THINK_PROMPT_HOME="$TMP/think-prompt"
+export THINK_PROMPT_CLAUDE_SETTINGS="$TMP/claude-settings.json"
 
 # 설치
 node packages/cli/dist/index.js install
@@ -116,7 +116,7 @@ npm link --workspace packages/cli packages/core packages/rules \
 
 # 2. M0 스파이크: 실제 Claude Code가 어떤 payload를 보내는지 먼저 관찰
 #    scripts/spike-settings.json을 ~/.claude/settings.json에 병합
-#    그 다음 claude를 사용하고 /tmp/pro-prompt-spike/ 에 덤프된 JSON 확인
+#    그 다음 claude를 사용하고 /tmp/think-prompt-spike/ 에 덤프된 JSON 확인
 #    결과를 docs/99-observation-log.md 에 기록
 
 # 3. 실제 설치
@@ -133,19 +133,19 @@ claude
 
 ### 3.4 코치 모드 켜고 체감
 ```bash
-pro-prompt coach on
-pro-prompt restart
+think-prompt coach on
+think-prompt restart
 # claude를 열고 "fix" 처럼 모호한 프롬프트 → Claude가 "무엇을 어디서?" 부터 물어봐야 정상
-pro-prompt show <id>  # coach_context 컬럼에 주입된 힌트 확인
+think-prompt show <id>  # coach_context 컬럼에 주입된 힌트 확인
 ```
 
 ### 3.5 LLM 기능 (심판 · 리라이터) 켜기
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-pro-prompt config set llm.enabled true
-pro-prompt restart
+think-prompt config set llm.enabled true
+think-prompt restart
 # 낮은 점수 프롬프트에 대해 judge_score가 채워지고, 수동 리라이트도 가능
-pro-prompt rewrite <id>
+think-prompt rewrite <id>
 ```
 
 ---
@@ -255,18 +255,18 @@ think-prompt/
 ## 8. 명령어 치트시트
 
 ```bash
-pro-prompt install             # 훅 + 데몬 설치
-pro-prompt uninstall [--purge] # 제거
-pro-prompt start/stop/restart  # 데몬 제어
-pro-prompt status              # 3 데몬 상태
-pro-prompt doctor              # 건강 점검
-pro-prompt list [--tier bad --rule R003 --limit 10]
-pro-prompt show <id>
-pro-prompt rewrite <id> [--copy]
-pro-prompt coach on|off
-pro-prompt config get/set/list
-pro-prompt reprocess --all|--session <id>
-pro-prompt export --since 30d --out file.json
-pro-prompt open
-pro-prompt wipe --yes
+think-prompt install             # 훅 + 데몬 설치
+think-prompt uninstall [--purge] # 제거
+think-prompt start/stop/restart  # 데몬 제어
+think-prompt status              # 3 데몬 상태
+think-prompt doctor              # 건강 점검
+think-prompt list [--tier bad --rule R003 --limit 10]
+think-prompt show <id>
+think-prompt rewrite <id> [--copy]
+think-prompt coach on|off
+think-prompt config get/set/list
+think-prompt reprocess --all|--session <id>
+think-prompt export --since 30d --out file.json
+think-prompt open
+think-prompt wipe --yes
 ```

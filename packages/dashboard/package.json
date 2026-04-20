@@ -1,13 +1,13 @@
 {
-  "name": "@pro-prompt/dashboard",
+  "name": "@think-prompt/dashboard",
   "version": "0.1.0",
-  "description": "Local web dashboard for Pro-Prompt",
+  "description": "Local web dashboard for Think-Prompt",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "pro-prompt-dashboard": "./dist/index.js"
+    "think-prompt-dashboard": "./dist/index.js"
   },
   "exports": {
     ".": {
@@ -21,8 +21,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pro-prompt/core": "workspace:*",
-    "@pro-prompt/rules": "workspace:*",
+    "@think-prompt/core": "workspace:*",
+    "@think-prompt/rules": "workspace:*",
     "fastify": "^5.2.0"
   },
   "devDependencies": {

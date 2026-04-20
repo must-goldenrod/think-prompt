@@ -1,5 +1,5 @@
 import { rmSync } from 'node:fs';
-import { getPaths } from '@pro-prompt/core';
+import { getPaths } from '@think-prompt/core';
 import pc from 'picocolors';
 import { stop } from '../daemon.js';
 import { removeHooksFromSettings } from '../settings-merge.js';
@@ -7,7 +7,8 @@ import { removeHooksFromSettings } from '../settings-merge.js';
 export async function wipeCmd(opts: { yes?: boolean }): Promise<void> {
   if (!opts.yes) {
     console.log(
-      pc.red('⚠') + ' This will delete all Pro-Prompt data and remove hooks. Pass --yes to confirm.'
+      pc.red('⚠') +
+        ' This will delete all Think-Prompt data and remove hooks. Pass --yes to confirm.'
     );
     return;
   }
@@ -17,5 +18,5 @@ export async function wipeCmd(opts: { yes?: boolean }): Promise<void> {
   const paths = getPaths();
   removeHooksFromSettings(paths.claudeSettings);
   rmSync(paths.root, { recursive: true, force: true });
-  console.log(pc.green('✓') + ' Pro-Prompt wiped');
+  console.log(pc.green('✓') + ' Think-Prompt wiped');
 }

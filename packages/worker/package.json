@@ -1,5 +1,5 @@
 {
-  "name": "@pro-prompt/worker",
+  "name": "@think-prompt/worker",
   "version": "0.1.0",
   "description": "Background worker: transcript parsing, LLM judge, rewriter",
   "type": "module",
@@ -7,7 +7,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "pro-prompt-worker": "./dist/index.js"
+    "think-prompt-worker": "./dist/index.js"
   },
   "exports": {
     ".": {
@@ -22,8 +22,8 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@pro-prompt/core": "workspace:*",
-    "@pro-prompt/rules": "workspace:*"
+    "@think-prompt/core": "workspace:*",
+    "@think-prompt/rules": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

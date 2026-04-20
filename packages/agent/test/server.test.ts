@@ -8,12 +8,12 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'pp-agent-'));
-  process.env.PRO_PROMPT_HOME = tmp;
+  process.env.THINK_PROMPT_HOME = tmp;
 });
 
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
-  delete process.env.PRO_PROMPT_HOME;
+  delete process.env.THINK_PROMPT_HOME;
 });
 
 describe('agent server', () => {
@@ -77,7 +77,7 @@ describe('agent server', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.additionalContext).toContain('Pro-Prompt coaching hint');
+    expect(body.additionalContext).toContain('Think-Prompt coaching hint');
     await app.close();
   });
 

@@ -19,9 +19,9 @@ import {
   upsertQualityScore,
   upsertSession,
   upsertSubagent,
-} from '@pro-prompt/core';
-import { composeFinalScore, computeRuleScore } from '@pro-prompt/core';
-import { runRules } from '@pro-prompt/rules';
+} from '@think-prompt/core';
+import { composeFinalScore, computeRuleScore } from '@think-prompt/core';
+import { runRules } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 export interface AgentDeps {
@@ -113,7 +113,7 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
           .map((h) => `- ${h.ruleId} (${h.ruleName}): ${h.message}`)
           .join('\n');
         const hint = [
-          '[Pro-Prompt coaching hint]',
+          '[Think-Prompt coaching hint]',
           "The user's prompt has these quality issues (from local rule checks):",
           issueLines,
           '',

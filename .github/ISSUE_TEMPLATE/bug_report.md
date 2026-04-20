@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something Pro-Prompt did, or failed to do, that it shouldn't
+about: Something Think-Prompt did, or failed to do, that it shouldn't
 labels: [bug]
 ---
 
@@ -18,21 +18,21 @@ labels: [bug]
 
 ## Environment
 
-- Pro-Prompt version: (e.g. `0.1.0` — `pro-prompt --version`)
+- Think-Prompt version: (e.g. `0.1.0` — `think-prompt --version`)
 - OS: (macOS 14.x / Ubuntu 22.04 / …)
 - Node: (e.g. 20.x, 22.x — `node --version`)
 - Claude Code version: (if relevant)
 
 ## Doctor output
 
-<!-- run `pro-prompt doctor` and paste the result here -->
+<!-- run `think-prompt doctor` and paste the result here -->
 
 ```
 ```
 
 ## Logs
 
-<!-- relevant snippets from ~/.pro-prompt/agent.log or worker.log -->
+<!-- relevant snippets from ~/.think-prompt/agent.log or worker.log -->
 
 ```
 ```

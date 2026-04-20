@@ -1,4 +1,4 @@
-import { openDb } from '@pro-prompt/core';
+import { openDb } from '@think-prompt/core';
 import pc from 'picocolors';
 
 function matchUsage(db: any, id: string): any | undefined {

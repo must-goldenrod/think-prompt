@@ -8,7 +8,7 @@
 
 ### 1.1 공통 레이아웃
 - 상단: 프로젝트 선택(cwd), 기간(오늘/7일/30일).
-- 좌측 사이드바: `프롬프트` · `세션` · `룰` · `설정` · `진단(`pro-prompt doctor` 결과`)`.
+- 좌측 사이드바: `프롬프트` · `세션` · `룰` · `설정` · `진단(`think-prompt doctor` 결과`)`.
 
 ### 1.2 `/` (Overview)
 - 오늘/주간 프롬프트 수, 평균 스코어, Tier 분포 도넛.
@@ -48,7 +48,7 @@
 - **데이터 완전 삭제** 버튼 (확인 모달 2단계)
 
 ### 1.8 `/doctor`
-`pro-prompt doctor` 결과를 브라우저에서도 확인. 훅 설치 상태 · 데몬 상태 · DB 무결성 · 최근 에러.
+`think-prompt doctor` 결과를 브라우저에서도 확인. 훅 설치 상태 · 데몬 상태 · DB 무결성 · 최근 에러.
 
 ### 1.9 기술 노트
 - Fastify + `@fastify/view` + eta 템플릿.
@@ -67,7 +67,7 @@
 
 ### 2.2 주입 템플릿
 ```
-[Pro-Prompt coaching hint]
+[Think-Prompt coaching hint]
 The user's prompt has these quality issues (from local rule checks):
 - R003 (no_context): no project/domain context given
 - R010 (no_constraint): output length/language not specified
@@ -87,28 +87,28 @@ If you can reasonably infer from the current conversation, proceed — but call 
 
 ---
 
-## 3. CLI (`pro-prompt ...`)
+## 3. CLI (`think-prompt ...`)
 
 모든 명령은 `--json` 플래그 지원(스크립트용).
 
 | 명령 | 설명 |
 |---|---|
-| `pro-prompt install` | 최초 설치: 디렉토리 생성 · DB 마이그레이션 · settings.json 훅 병합 · 데몬 start |
-| `pro-prompt uninstall` | 훅 블록 제거 · 데몬 stop. 데이터는 유지. `--purge`로 전체 삭제. |
-| `pro-prompt start` / `stop` / `restart` | 데몬 제어 |
-| `pro-prompt status` | 에이전트/워커 PID · 포트 · 최근 에러 · DB 크기 |
-| `pro-prompt doctor` | 설치 무결성 + 훅 payload 도달 여부 + 샘플 이벤트 재생 |
-| `pro-prompt list [--tier bad] [--rule R003] [--limit 20]` | 프롬프트 목록 |
-| `pro-prompt show <usage_id>` | 상세 + 룰 히트 + 스코어 |
-| `pro-prompt rewrite <usage_id>` | 리라이터 호출, diff 출력 |
-| `pro-prompt config get/set/list` | 설정 조회·수정 |
-| `pro-prompt coach on/off` | 코치 모드 토글 (= `config set agent.coach_mode`) |
-| `pro-prompt reprocess [--session id / --all]` | 룰 버전 갱신 후 재채점 |
-| `pro-prompt wipe` | 전체 데이터 + 훅 제거 (2단계 확인) |
-| `pro-prompt export [--since 30d] --out file.json` | 유저 소유 데이터 내보내기 |
+| `think-prompt install` | 최초 설치: 디렉토리 생성 · DB 마이그레이션 · settings.json 훅 병합 · 데몬 start |
+| `think-prompt uninstall` | 훅 블록 제거 · 데몬 stop. 데이터는 유지. `--purge`로 전체 삭제. |
+| `think-prompt start` / `stop` / `restart` | 데몬 제어 |
+| `think-prompt status` | 에이전트/워커 PID · 포트 · 최근 에러 · DB 크기 |
+| `think-prompt doctor` | 설치 무결성 + 훅 payload 도달 여부 + 샘플 이벤트 재생 |
+| `think-prompt list [--tier bad] [--rule R003] [--limit 20]` | 프롬프트 목록 |
+| `think-prompt show <usage_id>` | 상세 + 룰 히트 + 스코어 |
+| `think-prompt rewrite <usage_id>` | 리라이터 호출, diff 출력 |
+| `think-prompt config get/set/list` | 설정 조회·수정 |
+| `think-prompt coach on/off` | 코치 모드 토글 (= `config set agent.coach_mode`) |
+| `think-prompt reprocess [--session id / --all]` | 룰 버전 갱신 후 재채점 |
+| `think-prompt wipe` | 전체 데이터 + 훅 제거 (2단계 확인) |
+| `think-prompt export [--since 30d] --out file.json` | 유저 소유 데이터 내보내기 |
 
 ### 3.1 `doctor` 세부
-`pro-prompt doctor` 가 검사하는 항목:
+`think-prompt doctor` 가 검사하는 항목:
 1. `~/.claude/settings.json` 존재 + 우리 훅 블록 포함
 2. 에이전트 데몬 살아 있고 포트 응답
 3. 워커 데몬 살아 있음
@@ -119,14 +119,14 @@ If you can reasonably infer from the current conversation, proceed — but call 
 
 출력:
 ```
-Pro-Prompt Doctor
+Think-Prompt Doctor
 ─────────────────
 ✓ Hook installed in ~/.claude/settings.json
 ✓ Agent daemon running (pid 12345, :47823)
 ✓ Worker daemon running (pid 12346)
 ✓ Database schema_version=3 (current)
 ⚠ No prompt_usages in last 24h — hook may not be firing.
-  Try: run `claude` and type anything, then `pro-prompt doctor` again.
+  Try: run `claude` and type anything, then `think-prompt doctor` again.
 ✓ Config valid
 ⊘ LLM disabled (set llm.enabled=true to enable)
 ```

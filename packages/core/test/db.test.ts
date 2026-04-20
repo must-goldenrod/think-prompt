@@ -19,12 +19,12 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'pp-test-'));
-  process.env.PRO_PROMPT_HOME = tmp;
+  process.env.THINK_PROMPT_HOME = tmp;
 });
 
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
-  delete process.env.PRO_PROMPT_HOME;
+  delete process.env.THINK_PROMPT_HOME;
 });
 
 describe('db', () => {

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { insertPromptUsage, openDb, upsertQualityScore, upsertSession } from '@pro-prompt/core';
+import { insertPromptUsage, openDb, upsertQualityScore, upsertSession } from '@think-prompt/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildDashboardServer } from '../src/server.js';
 
@@ -9,12 +9,12 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'pp-dash-'));
-  process.env.PRO_PROMPT_HOME = tmp;
+  process.env.THINK_PROMPT_HOME = tmp;
 });
 
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
-  delete process.env.PRO_PROMPT_HOME;
+  delete process.env.THINK_PROMPT_HOME;
 });
 
 describe('dashboard', () => {

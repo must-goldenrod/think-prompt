@@ -1,4 +1,4 @@
-import { getPaths, loadConfig, openDb } from '@pro-prompt/core';
+import { getPaths, loadConfig, openDb } from '@think-prompt/core';
 import pc from 'picocolors';
 import { start } from '../daemon.js';
 import { mergeHooksIntoSettings } from '../settings-merge.js';
@@ -34,6 +34,6 @@ export async function installCmd(): Promise<void> {
   console.log(
     '\n' +
       pc.bold('Next:') +
-      ` open Claude Code, type anything, then run ${pc.cyan('pro-prompt list')}`
+      ` open Claude Code, type anything, then run ${pc.cyan('think-prompt list')}`
   );
 }

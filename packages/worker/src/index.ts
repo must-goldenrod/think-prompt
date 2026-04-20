@@ -7,7 +7,7 @@ import {
   openDb,
   readPendingJobs,
   requeue,
-} from '@pro-prompt/core';
+} from '@think-prompt/core';
 import { HANDLERS } from './jobs.js';
 
 const MAX_ATTEMPTS = 5;

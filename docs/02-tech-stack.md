@@ -33,7 +33,7 @@
 |---|---|
 | HTTP(에이전트·대시보드) | **Fastify v5** |
 | DB | **better-sqlite3** (WAL mode) |
-| 큐(비동기) | **파일 기반 JSONL** (`~/.pro-prompt/queue.jsonl`, watcher) — 외부 의존 없음 |
+| 큐(비동기) | **파일 기반 JSONL** (`~/.think-prompt/queue.jsonl`, watcher) — 외부 의존 없음 |
 | 로그 | **pino** + `pino-pretty`(로컬 tail) |
 | 스키마 검증 | **zod** |
 
@@ -56,7 +56,7 @@
 - **htmx** — 부분 갱신. 번들 없음
 
 ## 배포
-- `npm publish` (public) — `@pro-prompt/*` 스코프
+- `npm publish` (public) — `@think-prompt/*` 스코프
 - **GitHub Actions** 워크플로: PR 테스트 → tag → publish
 - **Conventional Commits** 기반 changelog 자동화(`changesets`)
 - 라이선스: **MIT**
@@ -65,12 +65,12 @@
 ## 설정 파일 경로
 | 경로 | 용도 |
 |---|---|
-| `~/.pro-prompt/config.json` | 유저 전역 설정 |
-| `~/.pro-prompt/prompts.db` | 프롬프트/이벤트 저장 |
-| `~/.pro-prompt/queue.jsonl` | 워커 큐 (append-only) |
-| `~/.pro-prompt/agent.pid` | 에이전트 PID |
-| `~/.pro-prompt/worker.pid` | 워커 PID |
-| `~/.pro-prompt/agent.log`, `worker.log` | 로그 파일 (7일 로테이션) |
+| `~/.think-prompt/config.json` | 유저 전역 설정 |
+| `~/.think-prompt/prompts.db` | 프롬프트/이벤트 저장 |
+| `~/.think-prompt/queue.jsonl` | 워커 큐 (append-only) |
+| `~/.think-prompt/agent.pid` | 에이전트 PID |
+| `~/.think-prompt/worker.pid` | 워커 PID |
+| `~/.think-prompt/agent.log`, `worker.log` | 로그 파일 (7일 로테이션) |
 | `~/.claude/settings.json` | Claude Code 설정(훅 블록 병합 대상) |
 
 ## 포트 (D-018)

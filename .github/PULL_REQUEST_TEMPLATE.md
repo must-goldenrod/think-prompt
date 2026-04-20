@@ -15,12 +15,12 @@
 
 ## Affected packages
 
-- [ ] `@pro-prompt/core`
-- [ ] `@pro-prompt/rules`
-- [ ] `@pro-prompt/agent`
-- [ ] `@pro-prompt/worker`
-- [ ] `@pro-prompt/dashboard`
-- [ ] `@pro-prompt/cli`
+- [ ] `@think-prompt/core`
+- [ ] `@think-prompt/rules`
+- [ ] `@think-prompt/agent`
+- [ ] `@think-prompt/worker`
+- [ ] `@think-prompt/dashboard`
+- [ ] `@think-prompt/cli`
 - [ ] `docs/`
 
 ## Decision log

@@ -1,5 +1,5 @@
 {
-  "name": "@pro-prompt/core",
+  "name": "@think-prompt/core",
   "version": "0.1.0",
   "description": "Shared core: DB, types, logger, PII, scorer, transcript parser",
   "type": "module",

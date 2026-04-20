@@ -7,8 +7,8 @@ import {
   insertRuleHit,
   openDb,
   upsertQualityScore,
-} from '@pro-prompt/core';
-import { runRules } from '@pro-prompt/rules';
+} from '@think-prompt/core';
+import { runRules } from '@think-prompt/rules';
 import pc from 'picocolors';
 
 export async function exportCmd(opts: { since?: string; out: string }): Promise<void> {

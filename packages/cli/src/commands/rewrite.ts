@@ -1,4 +1,4 @@
-import { enqueue, getPaths, llm, loadConfig, openDb, ulid } from '@pro-prompt/core';
+import { enqueue, getPaths, llm, loadConfig, openDb, ulid } from '@think-prompt/core';
 import pc from 'picocolors';
 
 const REWRITE_SYSTEM = `You rewrite developer prompts to maximize clarity and reliability for Claude Code.
@@ -34,7 +34,7 @@ export async function rewriteCmd(id: string, opts: { copy?: boolean }): Promise<
   // Try synchronous LLM call if configured; otherwise queue as background job.
   if (!config.llm.enabled) {
     console.log(pc.yellow('⚠') + ' LLM is disabled. Enable first: ');
-    console.log('  pro-prompt config set llm.enabled true');
+    console.log('  think-prompt config set llm.enabled true');
     console.log('  export ANTHROPIC_API_KEY=...');
     db.close();
     return;

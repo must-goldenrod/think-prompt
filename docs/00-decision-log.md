@@ -104,7 +104,7 @@
 - **근거:** MVP는 결정론적 정확도·속도가 중요. 탐지 실패 시 "의심 필드 플래그 + 유저 확인" 플로우 병행.
 
 ## D-017 · 데몬 관리
-- **결정:** **detached child process + pidfile** (`~/.pro-prompt/agent.pid`). launchd/systemd는 미사용.
+- **결정:** **detached child process + pidfile** (`~/.think-prompt/agent.pid`). launchd/systemd는 미사용.
 - **근거:** OS별 분기 없이 통일. CLI가 `start/stop/status/restart` 제공. OS 부팅 자동 실행은 M8에서 선택 기능으로 추가.
 
 ## D-018 · 포트
@@ -124,7 +124,7 @@
 - **근거:** 첫 인상에서 마찰 최소. 가치가 체감되면 사용자가 스스로 ON.
 
 ## D-022 · 배포 채널
-- **결정:** **npm (global)** 단독으로 시작. `npm install -g @pro-prompt/cli`. Homebrew 포뮬라는 이후.
+- **결정:** **npm (global)** 단독으로 시작. `npm install -g @think-prompt/cli`. Homebrew 포뮬라는 이후.
 - **근거:** Claude Code 사용자는 거의 전원 Node 있음. 첫 배포를 단순화.
 
 ## D-023 · 라이선스 / 리포지토리
@@ -149,10 +149,10 @@
 
 ## D-028 · 오류 처리 원칙
 - **결정:** **Fail-open**. 에이전트가 다운되거나 에러여도 Claude Code는 절대 막지 않는다.
-- **근거:** 사용자 워크플로 방해 시 Pro-Prompt 제거가 곧바로 따라온다. 데이터 누락 > 사용자 막힘.
+- **근거:** 사용자 워크플로 방해 시 Think-Prompt 제거가 곧바로 따라온다. 데이터 누락 > 사용자 막힘.
 
 ## D-029 · 설정 파일 우선순위
-- **결정:** `~/.pro-prompt/config.json` > 환경변수 > 기본값. 사용자 수정 가능.
+- **결정:** `~/.think-prompt/config.json` > 환경변수 > 기본값. 사용자 수정 가능.
 - **근거:** 설정은 여러 기기에서 동기화될 수 있도록 파일 기반. 환경변수는 임시 override.
 
 ## D-030 · 텔레메트리

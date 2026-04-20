@@ -1,4 +1,4 @@
-# Pro-Prompt (가칭) — 서비스 초안
+# Think-Prompt (가칭) — 서비스 초안
 
 > 본 문서는 브레인스토밍/논의를 바탕으로 정리한 **초안(draft)** 이다.
 > 1차 의사결정은 §0.5에 확정 기록. 이후 결정은 동일 위치에 append.
@@ -114,9 +114,9 @@
 
 ### 3.1 CLI / 터미널 훅 구조(현실적 설계)
 
-- **로컬 에이전트 (daemon):** `pro-prompt-agent` 가 `localhost:port`에 상주. CLI 래퍼 → 에이전트 POST → PII 마스킹 → 로컬 DB 또는 중앙 서버 전송.
+- **로컬 에이전트 (daemon):** `think-prompt-agent` 가 `localhost:port`에 상주. CLI 래퍼 → 에이전트 POST → PII 마스킹 → 로컬 DB 또는 중앙 서버 전송.
 - **래퍼 방식 3종:**
-  - 쉘 alias: `alias claude='pro-prompt-cli claude'`
+  - 쉘 alias: `alias claude='think-prompt-cli claude'`
   - wrapper binary: `pro-claude` 가 stdin/stdout을 중계
   - OTel/HTTP 프록시: 일부 툴은 이 방식을 공식 지원
 - **장점:** 구현 난이도 낮고, Observability 업계의 기존 패턴과 정확히 일치.
@@ -293,7 +293,7 @@
 
 ### 10.2 다음 단계
 - [ ] SDK 프로토타입 (Node + Python) — OpenAI/Anthropic/Gemini 3종 대응
-- [ ] `pro-prompt-agent` 로컬 daemon 프로토타입 (Go 또는 Node 권장)
+- [ ] `think-prompt-agent` 로컬 daemon 프로토타입 (Go 또는 Node 권장)
 - [ ] 대시보드 v0 (프롬프트 목록 + 호출 수 + 피드백)
 - [ ] A/B 파이프라인 설계
 - [ ] 템플릿 라이브러리 v0 (요약/번역/코드리뷰/리서치 등)

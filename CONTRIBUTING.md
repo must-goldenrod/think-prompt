@@ -1,6 +1,6 @@
-# Contributing to Pro-Prompt
+# Contributing to Think-Prompt
 
-Thanks for your interest. Pro-Prompt is a **local-first** tool, and contributions
+Thanks for your interest. Think-Prompt is a **local-first** tool, and contributions
 are welcome — whether that is a bug report, a rule tweak, a new LLM adapter,
 or documentation.
 
@@ -51,7 +51,7 @@ pnpm run ci            # typecheck + lint + test + build
 - TypeScript `strict` + `exactOptionalPropertyTypes`. Prefer narrow types to
   `any`.
 - Biome handles lint and format. Run `pnpm lint:fix` before pushing.
-- Keep daemons **fail-open** (`docs/00-decision-log.md` D-028). Pro-Prompt
+- Keep daemons **fail-open** (`docs/00-decision-log.md` D-028). Think-Prompt
   must never block Claude Code because it crashed.
 
 ## Tests

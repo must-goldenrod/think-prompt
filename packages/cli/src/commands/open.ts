@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { loadConfig } from '@pro-prompt/core';
+import { loadConfig } from '@think-prompt/core';
 import pc from 'picocolors';
 
 export async function openCmd(): Promise<void> {

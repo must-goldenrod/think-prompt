@@ -1,4 +1,4 @@
-import { loadConfig, saveConfig, setConfigValue } from '@pro-prompt/core';
+import { loadConfig, saveConfig, setConfigValue } from '@think-prompt/core';
 import pc from 'picocolors';
 
 function getDeep(obj: any, key: string): unknown {
@@ -36,12 +36,12 @@ export async function configListCmd(): Promise<void> {
 
 export async function coachCmd(state: string): Promise<void> {
   if (state !== 'on' && state !== 'off') {
-    console.log(pc.red('usage: pro-prompt coach <on|off>'));
+    console.log(pc.red('usage: think-prompt coach <on|off>'));
     return;
   }
   const cfg = loadConfig();
   const next = setConfigValue(cfg, 'agent.coach_mode', state === 'on');
   saveConfig(next);
   console.log(pc.green('✓') + ` coach_mode=${state === 'on' ? 'on' : 'off'}`);
-  console.log(pc.dim('(restart the agent for the change to take effect: `pro-prompt restart`)'));
+  console.log(pc.dim('(restart the agent for the change to take effect: `think-prompt restart`)'));
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트
 
-**Pro-Prompt (가칭)** — Claude Code 프롬프트를 로컬에서 수집·진단·코칭하는 개인 개발자용 무료 툴.
+**Think-Prompt (가칭)** — Claude Code 프롬프트를 로컬에서 수집·진단·코칭하는 개인 개발자용 무료 툴.
 
 ## 리포 상태
 
@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **실측과 다른 사실은 `99-observation-log.md`에 기록** 후 해당 스펙 문서에 반영.
 - **Fail-open 원칙(D-028):** 어떤 코드도 Claude Code를 막지 않는다. 에이전트 다운 = 조용히 통과.
 - **로컬 중심(D-004):** 원문 프롬프트는 유저 PC 밖으로 나가지 않는다. 서버 동기화는 Opt-in.
-- **마일스톤 끝날 때마다:** `pro-prompt doctor` 통과 + 유저가 `07-build-and-test-plan.md`의 해당 M 테스트 절차로 직접 검증.
+- **마일스톤 끝날 때마다:** `think-prompt doctor` 통과 + 유저가 `07-build-and-test-plan.md`의 해당 M 테스트 절차로 직접 검증.
 
 ## 빌드 · 테스트 · 실행
 
@@ -49,14 +49,14 @@ pnpm typecheck          # 각 패키지 tsc --noEmit
 pnpm test               # vitest 전 패키지
 pnpm lint               # biome
 pnpm run ci             # 위 네 개를 순차 실행
-pnpm -F @pro-prompt/core test   # 한 패키지만 테스트
+pnpm -F @think-prompt/core test   # 한 패키지만 테스트
 ```
 
 ### 로컬에서 바이너리 돌리기 (격리 환경)
 ```bash
 TMP=$(mktemp -d)
-export PRO_PROMPT_HOME="$TMP/pro-prompt"
-export PRO_PROMPT_CLAUDE_SETTINGS="$TMP/claude-settings.json"
+export THINK_PROMPT_HOME="$TMP/think-prompt"
+export THINK_PROMPT_CLAUDE_SETTINGS="$TMP/claude-settings.json"
 node packages/cli/dist/index.js install
 node packages/cli/dist/index.js status
 node packages/cli/dist/index.js doctor
@@ -68,9 +68,9 @@ node packages/cli/dist/index.js doctor
 - **dashboard** (`packages/dashboard`) — `127.0.0.1:47824`, 로컬 웹 UI
 
 ### 데이터 위치
-- `~/.pro-prompt/prompts.db` (SQLite WAL)
-- `~/.pro-prompt/queue.jsonl`, `queue.offset`
-- `~/.pro-prompt/agent.log`, `worker.log`
+- `~/.think-prompt/prompts.db` (SQLite WAL)
+- `~/.think-prompt/queue.jsonl`, `queue.offset`
+- `~/.think-prompt/agent.log`, `worker.log`
 
 ### 세부 계획
 `docs/07-build-and-test-plan.md` · 빌드 리포트는 `REPORT.md`.

@@ -1,5 +1,5 @@
-import { type Config, createLogger, getPaths, loadConfig, openDb } from '@pro-prompt/core';
-import { getRulesCatalog } from '@pro-prompt/rules';
+import { type Config, createLogger, getPaths, loadConfig, openDb } from '@think-prompt/core';
+import { getRulesCatalog } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { escapeHtml, layout, tierBadge } from './html.js';
 
@@ -60,7 +60,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
           <div class="text-xs text-gray-500">Coach mode</div>
           <div class="text-lg mt-2">${config.agent.coach_mode ? '<span class="text-green-600">ON</span>' : '<span class="text-gray-500">OFF</span>'}</div>
-          <div class="text-xs text-gray-400 mt-1">pro-prompt coach ${config.agent.coach_mode ? 'off' : 'on'}</div>
+          <div class="text-xs text-gray-400 mt-1">think-prompt coach ${config.agent.coach_mode ? 'off' : 'on'}</div>
         </div>
       </div>
 
@@ -238,7 +238,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       <div class="space-y-3">
         ${
           rewrites.length === 0
-            ? '<div class="text-sm text-gray-400">(none) — try: <code>pro-prompt rewrite ' +
+            ? '<div class="text-sm text-gray-400">(none) — try: <code>think-prompt rewrite ' +
               escapeHtml(u.id) +
               '</code></div>'
             : rewrites
@@ -375,12 +375,12 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const body = `
       <h1 class="text-2xl font-bold mb-4">Settings</h1>
       <p class="text-sm text-gray-600 dark:text-zinc-300 mb-4">
-        Edit <code>~/.pro-prompt/config.json</code> or use the CLI:
+        Edit <code>~/.think-prompt/config.json</code> or use the CLI:
       </p>
-      <pre class="bg-gray-100 dark:bg-zinc-800 rounded p-4 text-sm">pro-prompt config list
-pro-prompt config set agent.coach_mode true
-pro-prompt config set llm.enabled true
-pro-prompt coach on</pre>
+      <pre class="bg-gray-100 dark:bg-zinc-800 rounded p-4 text-sm">think-prompt config list
+think-prompt config set agent.coach_mode true
+think-prompt config set llm.enabled true
+think-prompt coach on</pre>
       <h2 class="font-bold mt-6 mb-2">Current config (read-only)</h2>
       <pre class="bg-gray-100 dark:bg-zinc-800 rounded p-4 text-xs overflow-auto">${escapeHtml(JSON.stringify(config, null, 2))}</pre>`;
     reply.type('text/html; charset=utf-8').send(layout('Settings', body));

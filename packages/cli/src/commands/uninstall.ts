@@ -1,5 +1,5 @@
 import { rmSync } from 'node:fs';
-import { getPaths } from '@pro-prompt/core';
+import { getPaths } from '@think-prompt/core';
 import pc from 'picocolors';
 import { stop } from '../daemon.js';
 import { removeHooksFromSettings } from '../settings-merge.js';

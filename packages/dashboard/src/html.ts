@@ -13,7 +13,7 @@ export function layout(title: string, body: string): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(title)} · Pro-Prompt</title>
+  <title>${escapeHtml(title)} · Think-Prompt</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = { theme: { extend: { colors: {
@@ -29,7 +29,7 @@ export function layout(title: string, body: string): string {
   <header class="bg-white dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700">
     <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-6">
-        <a href="/" class="text-xl font-bold">Pro-Prompt</a>
+        <a href="/" class="text-xl font-bold">Think-Prompt</a>
         <nav class="text-sm flex gap-4 text-gray-600 dark:text-zinc-300">
           <a href="/" class="hover:text-blue-600">Overview</a>
           <a href="/prompts" class="hover:text-blue-600">Prompts</a>

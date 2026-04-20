@@ -10,7 +10,7 @@ import {
   transcript as tp,
   ulid,
   upsertQualityScore,
-} from '@pro-prompt/core';
+} from '@think-prompt/core';
 
 const MAX_TRANSCRIPT_BYTES = 10 * 1024 * 1024;
 
@@ -143,8 +143,8 @@ export async function handleSessionEnd(
     .all(payload.session_id, ctx.config.llm.judge_threshold_score) as Array<{ usage_id: string }>;
 
   if (rows.length === 0) return 'done';
-  const { enqueue } = await import('@pro-prompt/core');
-  const { getPaths } = await import('@pro-prompt/core');
+  const { enqueue } = await import('@think-prompt/core');
+  const { getPaths } = await import('@think-prompt/core');
   const paths = getPaths(ctx.rootOverride);
   for (const r of rows.slice(0, 5)) {
     enqueue(paths.queueFile, 'judge', { usage_id: r.usage_id });

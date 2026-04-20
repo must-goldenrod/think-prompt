@@ -26,10 +26,10 @@ importers:
 
   packages/agent:
     dependencies:
-      '@pro-prompt/core':
+      '@think-prompt/core':
         specifier: workspace:*
         version: link:../core
-      '@pro-prompt/rules':
+      '@think-prompt/rules':
         specifier: workspace:*
         version: link:../rules
       fastify:
@@ -48,19 +48,19 @@ importers:
 
   packages/cli:
     dependencies:
-      '@pro-prompt/agent':
+      '@think-prompt/agent':
         specifier: workspace:*
         version: link:../agent
-      '@pro-prompt/core':
+      '@think-prompt/core':
         specifier: workspace:*
         version: link:../core
-      '@pro-prompt/dashboard':
+      '@think-prompt/dashboard':
         specifier: workspace:*
         version: link:../dashboard
-      '@pro-prompt/rules':
+      '@think-prompt/rules':
         specifier: workspace:*
         version: link:../rules
-      '@pro-prompt/worker':
+      '@think-prompt/worker':
         specifier: workspace:*
         version: link:../worker
       commander:
@@ -107,10 +107,10 @@ importers:
 
   packages/dashboard:
     dependencies:
-      '@pro-prompt/core':
+      '@think-prompt/core':
         specifier: workspace:*
         version: link:../core
-      '@pro-prompt/rules':
+      '@think-prompt/rules':
         specifier: workspace:*
         version: link:../rules
       fastify:
@@ -141,10 +141,10 @@ importers:
 
   packages/worker:
     dependencies:
-      '@pro-prompt/core':
+      '@think-prompt/core':
         specifier: workspace:*
         version: link:../core
-      '@pro-prompt/rules':
+      '@think-prompt/rules':
         specifier: workspace:*
         version: link:../rules
     devDependencies:

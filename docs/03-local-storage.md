@@ -4,10 +4,10 @@
 
 ---
 
-## 1. 디렉토리 레이아웃 (`~/.pro-prompt/`)
+## 1. 디렉토리 레이아웃 (`~/.think-prompt/`)
 
 ```
-~/.pro-prompt/
+~/.think-prompt/
 ├── config.json                # 유저 설정 (JSON)
 ├── prompts.db                 # SQLite (WAL 모드) — 메인 DB
 ├── prompts.db-wal             # SQLite WAL 자동 생성
@@ -223,12 +223,12 @@ Append-only JSONL. 각 라인은 하나의 작업.
 ## 5. 데몬 수명주기
 
 ### 5.1 두 데몬
-- **Agent** (`@pro-prompt/agent`): 훅 HTTP 수신 · 즉석 룰 검사 · 큐에 작업 push.
-- **Worker** (`@pro-prompt/worker`): 큐 소비 · 트랜스크립트 파싱 · LLM 호출 · 스코어 계산.
+- **Agent** (`@think-prompt/agent`): 훅 HTTP 수신 · 즉석 룰 검사 · 큐에 작업 push.
+- **Worker** (`@think-prompt/worker`): 큐 소비 · 트랜스크립트 파싱 · LLM 호출 · 스코어 계산.
 
 ### 5.2 기동
-- `pro-prompt start` → 두 프로세스 모두 `detached: true, stdio: 'ignore'`로 spawn. pidfile 기록.
-- `pro-prompt install` 시 자동 호출.
+- `think-prompt start` → 두 프로세스 모두 `detached: true, stdio: 'ignore'`로 spawn. pidfile 기록.
+- `think-prompt install` 시 자동 호출.
 
 ### 5.3 감시(Self-healing)
 - CLI가 기동 시 pidfile의 PID를 `process.kill(pid, 0)`으로 검사. 죽어 있으면 재기동.
@@ -237,7 +237,7 @@ Append-only JSONL. 각 라인은 하나의 작업.
 
 ### 5.4 종료
 - SIGTERM 수신 시: 에이전트는 큐 flush 후 종료. 워커는 현재 작업 완료 후 종료.
-- `pro-prompt stop` 이 SIGTERM 전송.
+- `think-prompt stop` 이 SIGTERM 전송.
 
 ### 5.5 자동 부팅(옵션)
 - MVP에선 수동. M8에서 `--autostart` 옵션으로 macOS(launchd)/Linux(systemd-user) 등록 지원.
@@ -280,12 +280,12 @@ Append-only JSONL. 각 라인은 하나의 작업.
 }
 ```
 
-유저가 직접 편집 가능. `pro-prompt config set <key> <value>` CLI도 제공.
+유저가 직접 편집 가능. `think-prompt config set <key> <value>` CLI도 제공.
 
 ---
 
 ## 7. 보존 · 삭제
 
 - **보존 기간:** `privacy.retention_days` (기본 90일). 워커가 매일 자정 이후 오래된 `prompt_usages` 원문을 NULL 처리하고 메타만 유지.
-- **완전 삭제:** `pro-prompt wipe` → `~/.pro-prompt/` 제거 + Claude `settings.json`의 훅 블록 제거.
+- **완전 삭제:** `think-prompt wipe` → `~/.think-prompt/` 제거 + Claude `settings.json`의 훅 블록 제거.
 - **개별 삭제:** 대시보드/CLI에서 `usage_id` 지정 삭제.

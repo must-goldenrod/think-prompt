@@ -6,7 +6,7 @@ labels: [enhancement]
 
 ## Problem
 
-<!-- what are you trying to do that Pro-Prompt doesn't help with today? -->
+<!-- what are you trying to do that Think-Prompt doesn't help with today? -->
 
 ## Proposed solution
 

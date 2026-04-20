@@ -188,7 +188,7 @@ char_len: <len>
 ## 5. 자동 리라이터 (Rewriter)
 
 ### 5.1 Trigger
-- 유저가 대시보드에서 "개선안 보기" 클릭 OR CLI `pro-prompt rewrite <usage_id>`.
+- 유저가 대시보드에서 "개선안 보기" 클릭 OR CLI `think-prompt rewrite <usage_id>`.
 - 기본은 수동(자동 실행은 토큰 낭비).
 
 ### 5.2 시스템 프롬프트 (캐시)
@@ -249,4 +249,4 @@ Return STRICT JSON:
 ## 7. 룰 버저닝
 - 룰셋 전체 해시 = `rules_version`.
 - 스코어 행은 `rules_version` 포함 저장.
-- 룰셋 업데이트 릴리스 시 `pro-prompt reprocess --all` CLI로 재채점 가능.
+- 룰셋 업데이트 릴리스 시 `think-prompt reprocess --all` CLI로 재채점 가능.

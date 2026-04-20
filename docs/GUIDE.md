@@ -1,4 +1,4 @@
-# Pro-Prompt 완전 입문 가이드
+# Think-Prompt 완전 입문 가이드
 
 > **누구를 위한 글인가요?**
 > - Claude Code를 쓰고 있고, 프롬프트를 더 잘 쓰고 싶은 분
@@ -9,7 +9,7 @@
 
 ## 📖 목차
 
-1. [Pro-Prompt가 뭔가요?](#1-pro-prompt가-뭔가요)
+1. [Think-Prompt가 뭔가요?](#1-think-prompt가-뭔가요)
 2. [설치 전 준비물](#2-설치-전-준비물-5분)
 3. [처음 설치하기](#3-처음-설치하기-10분)
 4. [제대로 설치됐는지 확인](#4-제대로-설치됐는지-확인)
@@ -21,17 +21,17 @@
 
 ---
 
-## 1. Pro-Prompt가 뭔가요?
+## 1. Think-Prompt가 뭔가요?
 
 Claude Code에 **"프롬프트 개인 코치"** 를 붙인다고 생각하시면 돼요.
 
 ### 비유로 이해하기
 
-운동 앱이 자동으로 심박수 · 걸음 수를 기록하고, 주말에 "이번 주는 좀 적네요" 알려주는 것처럼 — Pro-Prompt는 여러분이 Claude Code에 **치는 프롬프트를 자동으로 기록**하고, **어디가 부족한지 조용히 알려줍니다.**
+운동 앱이 자동으로 심박수 · 걸음 수를 기록하고, 주말에 "이번 주는 좀 적네요" 알려주는 것처럼 — Think-Prompt는 여러분이 Claude Code에 **치는 프롬프트를 자동으로 기록**하고, **어디가 부족한지 조용히 알려줍니다.**
 
 ### 구체적으로 뭘 하나요?
 
-1. **자동 수집** — Claude Code에 입력한 모든 프롬프트가 여러분 컴퓨터의 로컬 파일(`~/.pro-prompt/prompts.db`)에 저장돼요.
+1. **자동 수집** — Claude Code에 입력한 모든 프롬프트가 여러분 컴퓨터의 로컬 파일(`~/.think-prompt/prompts.db`)에 저장돼요.
 2. **자동 채점** — 12가지 안티패턴 룰로 프롬프트를 검사해 0-100점을 매깁니다. 예: "출력 형식을 안 정해서 -10점"
 3. **개선안 제시** — (선택) Claude API 키를 주면 낮은 점수 프롬프트를 LLM이 더 나은 버전으로 리라이트해줘요.
 4. **대시보드** — `http://127.0.0.1:47824` 에 로컬 웹 페이지가 열립니다. 지난주 통계 · 점수 낮은 프롬프트 TOP 5 등.
@@ -39,7 +39,7 @@ Claude Code에 **"프롬프트 개인 코치"** 를 붙인다고 생각하시면
 ### 제일 중요한 것 3가지
 
 - **🔒 프라이버시:** 모든 데이터는 **여러분 컴퓨터 밖으로 나가지 않아요.** 서버 전송 없음. (Claude API를 쓸 때만 해당 프롬프트가 Anthropic에 가는데, 이건 Claude Code 자체가 이미 하는 일이죠.)
-- **🛡️ 안전성:** Pro-Prompt에 문제가 생겨도 **Claude Code는 절대 멈추지 않아요** (fail-open 원칙). 최악의 경우 그냥 기록이 안 될 뿐.
+- **🛡️ 안전성:** Think-Prompt에 문제가 생겨도 **Claude Code는 절대 멈추지 않아요** (fail-open 원칙). 최악의 경우 그냥 기록이 안 될 뿐.
 - **💰 무료:** 돈 안 받아요. 광고 없어요. 계정 만들 필요 없어요.
 
 ---
@@ -124,7 +124,7 @@ git --version
 
 ### 2.6 Claude Code 설치 확인
 
-Pro-Prompt는 Claude Code를 위한 도구라 Claude Code가 있어야 써먹을 수 있어요.
+Think-Prompt는 Claude Code를 위한 도구라 Claude Code가 있어야 써먹을 수 있어요.
 ```bash
 claude --version
 ```
@@ -143,7 +143,7 @@ claude --version
 
 ## 3. 처음 설치하기 (10분)
 
-> 현재 Pro-Prompt는 **npm에 아직 배포 전** 이라 **소스코드로 설치**해야 해요. 이슈 #8에서 추적 중.
+> 현재 Think-Prompt는 **npm에 아직 배포 전** 이라 **소스코드로 설치**해야 해요. 이슈 #8에서 추적 중.
 
 ### 3.1 리포 받기
 
@@ -207,9 +207,9 @@ node packages/cli/dist/index.js install
 ```
 
 **뭐가 일어나요?**
-1. `~/.pro-prompt/` 폴더 생성 (데이터 저장소)
+1. `~/.think-prompt/` 폴더 생성 (데이터 저장소)
 2. SQLite 데이터베이스 초기화
-3. `~/.claude/settings.json` 에 Pro-Prompt 훅 6개 추가 (기존 설정은 자동 백업 후 보존)
+3. `~/.claude/settings.json` 에 Think-Prompt 훅 6개 추가 (기존 설정은 자동 백업 후 보존)
 4. 3개 데몬(agent · worker · dashboard) 백그라운드 실행
 
 **기대 출력:**
@@ -220,19 +220,19 @@ node packages/cli/dist/index.js install
 ✓ worker running (pid 12346)
 ✓ dashboard running (pid 12347, :47824)
 
-Next: open Claude Code, type anything, then run pro-prompt list
+Next: open Claude Code, type anything, then run think-prompt list
 ```
 
-📌 **선택 — 매번 `node packages/cli/dist/index.js` 치기 귀찮으면** `pro-prompt` 명령으로 단축:
+📌 **선택 — 매번 `node packages/cli/dist/index.js` 치기 귀찮으면** `think-prompt` 명령으로 단축:
 
 ```bash
 npm link --workspace packages/cli
 # 확인
-pro-prompt --version
+think-prompt --version
 # 0.1.0 나오면 성공
 ```
 
-아래부터는 **`pro-prompt`** 로 쓸게요. `npm link` 안 하셨으면 `node packages/cli/dist/index.js`로 치환해서 읽으면 돼요.
+아래부터는 **`think-prompt`** 로 쓸게요. `npm link` 안 하셨으면 `node packages/cli/dist/index.js`로 치환해서 읽으면 돼요.
 
 ---
 
@@ -241,12 +241,12 @@ pro-prompt --version
 ### 4.1 건강검진 (Doctor)
 
 ```bash
-pro-prompt doctor
+think-prompt doctor
 ```
 
 **기대 출력 (좋은 상태):**
 ```
-Pro-Prompt Doctor
+Think-Prompt Doctor
 ─────────────────
 ✓ hooks installed in /Users/당신이름/.claude/settings.json
 ✓ agent running (pid 12345, :47823)
@@ -277,7 +277,7 @@ claude
 
 Claude가 답하고 나면 **그 터미널을 닫지 말고** 다른 터미널에서:
 ```bash
-pro-prompt list
+think-prompt list
 ```
 
 **기대 출력:**
@@ -297,7 +297,7 @@ pro-prompt list
 ### 4.3 대시보드 열어보기
 
 ```bash
-pro-prompt open
+think-prompt open
 ```
 
 브라우저에 http://127.0.0.1:47824 가 열려요. 못 열렸으면 주소 직접 붙여넣기.
@@ -318,7 +318,7 @@ pro-prompt open
 ### 4.4 상세 보기
 
 ```bash
-pro-prompt show 7KMQAZ9V
+think-prompt show 7KMQAZ9V
 ```
 
 (위 `list` 에서 본 ID 8자리만 써도 돼요)
@@ -348,26 +348,26 @@ rule hits:
 
 ### 5.1 평소엔 그냥 Claude Code 쓰기만 해도 돼요
 
-Pro-Prompt는 백그라운드에서 알아서 작동해요. 특별히 뭘 할 필요 없음.
+Think-Prompt는 백그라운드에서 알아서 작동해요. 특별히 뭘 할 필요 없음.
 
 ### 5.2 가끔 들여다보기 — 3가지 일상 루틴
 
 **🌅 하루 시작할 때 (10초)**
 ```bash
-pro-prompt doctor
+think-prompt doctor
 ```
 ✓ 가 다 떠 있으면 정상 작동 중.
 
 **☕️ 커피 마시면서 (1분)**
 ```bash
-pro-prompt list --tier bad --limit 10
-pro-prompt list --tier weak --limit 10
+think-prompt list --tier bad --limit 10
+think-prompt list --tier weak --limit 10
 ```
 "오늘 내 프롬프트 중 엉망인 거 뭐 있었지?" 확인.
 
 **📊 금요일 회고 (5분)**
 ```bash
-pro-prompt open   # 대시보드 오픈
+think-prompt open   # 대시보드 오픈
 ```
 - Overview에서 tier 분포 확인 — good:ok:weak:bad 비율이 지난주보다 나아졌나?
 - "낮은 점수 TOP 5" 훑어보기
@@ -378,7 +378,7 @@ pro-prompt open   # 대시보드 오픈
 LLM 기능 켜져 있으면 (§7.1 참고):
 ```bash
 # ID는 list에서 복사
-pro-prompt rewrite 7KMQAZ9V --copy
+think-prompt rewrite 7KMQAZ9V --copy
 ```
 
 **뭐가 일어나요?**
@@ -408,16 +408,16 @@ Success criteria: 수정 후 Jest 테스트 모두 통과
 **"나쁜 프롬프트 칠 때마다 Claude가 먼저 확인 질문하게 하고 싶어"** 라면:
 
 ```bash
-pro-prompt coach on
-pro-prompt restart
+think-prompt coach on
+think-prompt restart
 ```
 
-이제 점수 낮은 프롬프트 치면, Claude가 답하기 전에 `[Pro-Prompt coaching hint]` 로 "이거 맥락이 부족해 보이는데 확인부터 할게요" 같이 응답해요.
+이제 점수 낮은 프롬프트 치면, Claude가 답하기 전에 `[Think-Prompt coaching hint]` 로 "이거 맥락이 부족해 보이는데 확인부터 할게요" 같이 응답해요.
 
 귀찮으면:
 ```bash
-pro-prompt coach off
-pro-prompt restart
+think-prompt coach off
+think-prompt restart
 ```
 
 ### 5.5 점수가 너무 엄격하면?
@@ -425,14 +425,14 @@ pro-prompt restart
 기본 룰이 내 스타일에 안 맞으면 개별 끄기:
 ```bash
 # R008 (긴 프롬프트에 예시 없음) 같은 거 끄고 싶으면:
-pro-prompt config set rules.custom_disabled '["R008"]'
+think-prompt config set rules.custom_disabled '["R008"]'
 
 # 여러 개 끄려면:
-pro-prompt config set rules.custom_disabled '["R008","R011"]'
+think-prompt config set rules.custom_disabled '["R008","R011"]'
 
 # 새 설정 반영 + 기존 점수 재계산
-pro-prompt restart
-pro-prompt reprocess --all
+think-prompt restart
+think-prompt reprocess --all
 ```
 
 ---
@@ -468,51 +468,51 @@ pnpm install
 pnpm -r build
 ```
 
-### 6.3 `pro-prompt install` 후 doctor에 `⚠ no prompt_usages`
+### 6.3 `think-prompt install` 후 doctor에 `⚠ no prompt_usages`
 
 Claude Code 쓴 지 한참 됐는데도 프롬프트가 안 기록되는 경우.
 
 **체크리스트:**
 ```bash
 # 1. 훅이 settings.json에 있나
-cat ~/.claude/settings.json | grep -c "pro-prompt"
-# 0이면 재설치: pro-prompt install
+cat ~/.claude/settings.json | grep -c "think-prompt"
+# 0이면 재설치: think-prompt install
 
 # 2. 에이전트가 응답하나
 curl -s http://127.0.0.1:47823/health
 # {"ok":true,"pid":...,"port":47823} 안 나오면 재시작
-pro-prompt restart
+think-prompt restart
 
 # 3. 에이전트 로그 확인
-tail -30 ~/.pro-prompt/agent.log
+tail -30 ~/.think-prompt/agent.log
 ```
 
 **자주 터지는 원인:**
 - Claude Code가 오래된 세션을 쓰고 있어서 새 settings.json을 안 읽음 → Claude Code 완전 종료 후 재시작
-- 포트 47823이 점유됨 → `pro-prompt config set agent.port 47825` 하고 restart
+- 포트 47823이 점유됨 → `think-prompt config set agent.port 47825` 하고 restart
 
-### 6.4 데몬이 죽음 (`pro-prompt status` 에서 stopped)
+### 6.4 데몬이 죽음 (`think-prompt status` 에서 stopped)
 
 ```bash
-pro-prompt restart
-pro-prompt status
+think-prompt restart
+think-prompt status
 # 여전히 stopped면
-tail -50 ~/.pro-prompt/agent.log
-tail -50 ~/.pro-prompt/worker.log
+tail -50 ~/.think-prompt/agent.log
+tail -50 ~/.think-prompt/worker.log
 ```
 
 로그 메시지에서 `EADDRINUSE` 같은 게 보이면 포트 충돌. 다른 포트로:
 ```bash
-pro-prompt config set agent.port 47825
-pro-prompt config set dashboard.port 47826
-pro-prompt restart
+think-prompt config set agent.port 47825
+think-prompt config set dashboard.port 47826
+think-prompt restart
 ```
 
 ### 6.5 대시보드가 안 열림
 
 ```bash
 # 1. 데몬 살아있나
-pro-prompt status
+think-prompt status
 # dashboard 가 running 이어야 함
 
 # 2. 브라우저에 수동으로
@@ -528,22 +528,22 @@ pro-prompt status
 
 ```bash
 # 즉시 훅만 제거 (데이터는 보존)
-pro-prompt uninstall
+think-prompt uninstall
 # Claude Code 재시작해서 정상 작동 확인
 
 # 정상이면 원인 확인 후 다시:
-pro-prompt install
+think-prompt install
 ```
 
-정말 긴급이면 `~/.claude/settings.json` 을 에디터로 열어 `pro-prompt` 포함된 블록 직접 지우고 Claude Code 재시작.
+정말 긴급이면 `~/.claude/settings.json` 을 에디터로 열어 `think-prompt` 포함된 블록 직접 지우고 Claude Code 재시작.
 
 ### 6.7 로그 파일이 너무 커짐
 
 ```bash
-du -sh ~/.pro-prompt/*.log
+du -sh ~/.think-prompt/*.log
 # 100MB 넘으면:
-truncate -s 0 ~/.pro-prompt/agent.log
-truncate -s 0 ~/.pro-prompt/worker.log
+truncate -s 0 ~/.think-prompt/agent.log
+truncate -s 0 ~/.think-prompt/worker.log
 # 로그 로테이션은 아직 자동 아님 (이슈로 등록 권장)
 ```
 
@@ -551,11 +551,11 @@ truncate -s 0 ~/.pro-prompt/worker.log
 
 ```bash
 # DB 백업 후 재시작
-cp ~/.pro-prompt/prompts.db ~/.pro-prompt/prompts.db.backup
-pro-prompt restart
+cp ~/.think-prompt/prompts.db ~/.think-prompt/prompts.db.backup
+think-prompt restart
 
 # 최악의 경우 — 전부 지우고 다시 (데이터 손실!)
-pro-prompt wipe --yes
+think-prompt wipe --yes
 # 다시 설치
 cd ~/projects/think-prompt
 node packages/cli/dist/index.js install
@@ -583,28 +583,28 @@ echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-**3) Pro-Prompt에 LLM 켜기**
+**3) Think-Prompt에 LLM 켜기**
 ```bash
-pro-prompt config set llm.enabled true
-pro-prompt restart
+think-prompt config set llm.enabled true
+think-prompt restart
 ```
 
 **4) 확인**
 ```bash
-pro-prompt doctor
+think-prompt doctor
 # ✓ LLM enabled (model=claude-haiku-4-5) 나오면 OK
 ```
 
 이제:
 - 점수 60 미만 프롬프트는 자동으로 LLM 심판이 추가 평가 (세션 끝나고 1분 내)
-- `pro-prompt rewrite <id>` 로 수동 리라이트 요청 가능
+- `think-prompt rewrite <id>` 로 수동 리라이트 요청 가능
 
 **비용 절감 팁:**
 ```bash
 # 월 토큰 한도 (기본 50만 토큰)
-pro-prompt config set llm.max_monthly_tokens 100000
+think-prompt config set llm.max_monthly_tokens 100000
 # 심판 트리거 점수 낮추기 (기본 60 → 50이면 덜 자주 호출)
-pro-prompt config set llm.judge_threshold_score 50
+think-prompt config set llm.judge_threshold_score 50
 ```
 
 ### 7.2 데이터 내보내기
@@ -612,7 +612,7 @@ pro-prompt config set llm.judge_threshold_score 50
 주간 회고 때 자기 데이터를 엑셀/Notion으로 옮기고 싶으면:
 
 ```bash
-pro-prompt export --since 7d --out ~/weekly.json
+think-prompt export --since 7d --out ~/weekly.json
 ```
 
 JSON 구조:
@@ -631,7 +631,7 @@ JSON 구조:
 뭔가 특별한 분석 하고 싶으면 SQLite 직접:
 
 ```bash
-sqlite3 ~/.pro-prompt/prompts.db
+sqlite3 ~/.think-prompt/prompts.db
 
 # 내가 자주 쓰는 단어?
 .headers on
@@ -651,7 +651,7 @@ SELECT strftime('%w', created_at) AS dow, COUNT(*) FROM prompt_usages GROUP BY d
 현재는 `cwd` (프로젝트 경로)가 세션에 기록돼요. 필터링:
 
 ```bash
-sqlite3 ~/.pro-prompt/prompts.db "
+sqlite3 ~/.think-prompt/prompts.db "
 SELECT s.cwd, COUNT(*) AS n, AVG(q.final_score) AS avg_score
 FROM sessions s
 JOIN prompt_usages pu ON pu.session_id = s.id
@@ -665,7 +665,7 @@ GROUP BY s.cwd ORDER BY n DESC;
 프롬프트에 민감정보(이메일·전화번호 등) 있으면 자동 마스킹돼요. 확인:
 
 ```bash
-sqlite3 ~/.pro-prompt/prompts.db "
+sqlite3 ~/.think-prompt/prompts.db "
 SELECT substr(prompt_text,1,30) AS original,
        substr(pii_masked,1,30) AS masked,
        pii_hits
@@ -684,30 +684,30 @@ ORDER BY created_at DESC LIMIT 5;
 ### 8.1 잠깐 꺼두기 (데이터 유지)
 
 ```bash
-pro-prompt uninstall
+think-prompt uninstall
 ```
 
 - `~/.claude/settings.json` 에서 훅만 제거
 - 데몬 3개 모두 중지
-- 데이터(`~/.pro-prompt/`)는 그대로 유지
+- 데이터(`~/.think-prompt/`)는 그대로 유지
 
-다시 쓸 때: `pro-prompt install`
+다시 쓸 때: `think-prompt install`
 
 ### 8.2 완전 제거
 
 ```bash
-pro-prompt wipe --yes
+think-prompt wipe --yes
 ```
 
 - 훅 제거
 - 데몬 중지
-- `~/.pro-prompt/` **전체 삭제** (프롬프트 기록 다 날아감)
+- `~/.think-prompt/` **전체 삭제** (프롬프트 기록 다 날아감)
 
 ### 8.3 소스코드까지 완전 정리
 
 ```bash
 cd ~/projects && rm -rf think-prompt
-npm uninstall -g @pro-prompt/cli 2>/dev/null || true  # npm link 해놨으면
+npm uninstall -g @think-prompt/cli 2>/dev/null || true  # npm link 해놨으면
 ```
 
 ---
@@ -715,13 +715,13 @@ npm uninstall -g @pro-prompt/cli 2>/dev/null || true  # npm link 해놨으면
 ## 9. 자주 묻는 질문 (FAQ)
 
 ### Q1. 내 프롬프트가 Anthropic에 가나요?
-**아뇨.** 기본 설정으로는 어떤 데이터도 외부에 안 나가요. `LLM_enabled=true` 상태에서 `pro-prompt rewrite` 할 때만 해당 프롬프트가 Anthropic API에 가는데, 이건 Claude Code 자체가 이미 하는 거랑 같아요.
+**아뇨.** 기본 설정으로는 어떤 데이터도 외부에 안 나가요. `LLM_enabled=true` 상태에서 `think-prompt rewrite` 할 때만 해당 프롬프트가 Anthropic API에 가는데, 이건 Claude Code 자체가 이미 하는 거랑 같아요.
 
 ### Q2. 회사 프로젝트에서 써도 돼요?
-로컬 기록만 남고 외부 송출 없으니 보통 문제없지만, 회사 보안정책이 **"로컬에 코드 조각 저장 금지"** 같은 식이면 확인 필요. 그런 경우 `pro-prompt config set privacy.store_original false` 로 원문 저장 끄고 해시·마스킹본만 남길 수 있어요.
+로컬 기록만 남고 외부 송출 없으니 보통 문제없지만, 회사 보안정책이 **"로컬에 코드 조각 저장 금지"** 같은 식이면 확인 필요. 그런 경우 `think-prompt config set privacy.store_original false` 로 원문 저장 끄고 해시·마스킹본만 남길 수 있어요.
 
 ### Q3. 속도 느려지나요?
-훅당 평균 20-100ms. Claude Code 체감엔 영향 거의 없어요. 느껴지면 `pro-prompt doctor` 해보세요.
+훅당 평균 20-100ms. Claude Code 체감엔 영향 거의 없어요. 느껴지면 `think-prompt doctor` 해보세요.
 
 ### Q4. 얼마나 디스크 써요?
 프롬프트당 평균 1-5KB. 하루 100개 친다 쳐도 1달에 10-50MB 수준. 보존 기간 기본 90일.
@@ -732,11 +732,11 @@ npm uninstall -g @pro-prompt/cli 2>/dev/null || true  # npm link 해놨으면
 ### Q6. 실수로 민감한 프롬프트 남겼어요.
 ```bash
 # 해당 usage_id 찾아서
-pro-prompt list --limit 50
+think-prompt list --limit 50
 # 개별 삭제 (CLI 미지원 — SQL 직접)
-sqlite3 ~/.pro-prompt/prompts.db "DELETE FROM prompt_usages WHERE id LIKE '%XXXXX';"
+sqlite3 ~/.think-prompt/prompts.db "DELETE FROM prompt_usages WHERE id LIKE '%XXXXX';"
 # 또는 전체 초기화
-pro-prompt wipe --yes
+think-prompt wipe --yes
 ```
 
 ### Q7. 팀에서 공유해서 쓰고 싶어요.
@@ -759,7 +759,7 @@ pro-prompt wipe --yes
 ### Q9. 이거 버그 있는 것 같은데.
 GitHub 이슈 주세요: https://github.com/must-goldenrod/think-prompt/issues
 
-이슈 작성 시 `pro-prompt doctor` 결과와 `~/.pro-prompt/agent.log` 마지막 30줄 첨부해주면 훨씬 빨라요.
+이슈 작성 시 `think-prompt doctor` 결과와 `~/.think-prompt/agent.log` 마지막 30줄 첨부해주면 훨씬 빨라요.
 
 ### Q10. 기여하고 싶어요.
 `CONTRIBUTING.md` 참고. PR 환영해요.

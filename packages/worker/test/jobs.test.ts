@@ -10,7 +10,7 @@ import {
   upsertQualityScore,
   upsertSession,
   upsertSubagent,
-} from '@pro-prompt/core';
+} from '@think-prompt/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { handleParseSubagentTranscript, handleParseTranscript } from '../src/jobs.js';
 
@@ -18,12 +18,12 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'pp-worker-'));
-  process.env.PRO_PROMPT_HOME = tmp;
+  process.env.THINK_PROMPT_HOME = tmp;
 });
 
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
-  delete process.env.PRO_PROMPT_HOME;
+  delete process.env.THINK_PROMPT_HOME;
 });
 
 describe('worker jobs', () => {

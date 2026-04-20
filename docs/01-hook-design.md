@@ -1,6 +1,6 @@
 # 01 · Claude Code 훅 설계
 
-> Pro-Prompt MVP의 단일 수집 채널 = Claude Code 훅.
+> Think-Prompt MVP의 단일 수집 채널 = Claude Code 훅.
 > 본 문서는 "어디에 걸고, 뭘 잡고, 뭘 못 잡고, 못 잡는 건 어떻게 우회할지"를 확정한다.
 
 전제(§0.5 결정):
@@ -10,7 +10,7 @@
 
 ---
 
-## 1. Pro-Prompt가 필요한 데이터 ↔ 훅 매핑
+## 1. Think-Prompt가 필요한 데이터 ↔ 훅 매핑
 
 | # | 필요한 데이터 | 훅 | 직접 노출되는가? | 비고 |
 |---|---|---|---|---|
@@ -83,20 +83,20 @@
 │              Claude Code (유저 PC)                       │
 │                                                         │
 │  UserPromptSubmit ──►  ┌──────────────────────────┐     │
-│  SessionStart     ──►  │  pro-prompt-agent (CLI)   │     │
+│  SessionStart     ──►  │  think-prompt-agent (CLI)   │     │
 │  SubagentStart    ──►  │  - 룰 기반 즉석 진단     │     │
 │  PostToolUse      ──►  │  - append to SQLite      │     │
 │  Stop / SubagentStop ► │  - 큐에 transcript_path  │     │
 │                        └──────┬──────────┬────────┘     │
 │                               │          │              │
 │                               │          ▼              │
-│                               │   ~/.pro-prompt/        │
+│                               │   ~/.think-prompt/        │
 │                               │    prompts.db (SQLite)  │
 │                               │    queue.jsonl          │
 │                               │                         │
 │                               ▼                         │
 │                        ┌──────────────────────────┐     │
-│                        │  pro-prompt-worker        │     │
+│                        │  think-prompt-worker        │     │
 │                        │  (daemon, 비동기)         │     │
 │                        │  - transcript JSONL 파싱 │     │
 │                        │  - LLM 심판 (선택)        │     │
@@ -147,7 +147,7 @@
 2. **원문은 로컬 SQLite에만.** 컬럼: `prompt_text` (원문), `prompt_hash` (공유용).
 3. **PII 마스킹은 저장 전 파이프라인에서.** 에이전트가 append 전에 룰 기반 마스킹 1차 통과.
 4. **서버 동기화는 별도 프로세스.** 켜져 있을 때만, 마스킹된 사본 + 메트릭만 송출.
-5. **삭제는 파일 삭제 한 번으로.** `~/.pro-prompt/` 디렉토리 제거 = 모든 데이터 제거.
+5. **삭제는 파일 삭제 한 번으로.** `~/.think-prompt/` 디렉토리 제거 = 모든 데이터 제거.
 
 ---
 
@@ -211,7 +211,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pro-prompt-cli post-tool-use",
+            "command": "think-prompt-cli post-tool-use",
             "timeout": 3,
             "async": true
           }
@@ -235,13 +235,13 @@
 ```
 
 **설치 UX:**
-- `pro-prompt install` 명령이 `~/.claude/settings.json`에 위 블록을 병합 (기존 훅과 충돌 시 merge).
-- `pro-prompt uninstall`이 정확히 해당 블록만 제거.
+- `think-prompt install` 명령이 `~/.claude/settings.json`에 위 블록을 병합 (기존 훅과 충돌 시 merge).
+- `think-prompt uninstall`이 정확히 해당 블록만 제거.
 - 에이전트는 **launchd(macOS) / systemd-user(Linux)** 로 등록해 상시 기동.
 
 ---
 
-## 8. 훅 프로토콜 (pro-prompt-agent v0)
+## 8. 훅 프로토콜 (think-prompt-agent v0)
 
 ### 8.1 요청 규격 (Claude Code → agent)
 모든 훅은 HTTP POST, body는 Claude Code의 표준 payload 그대로 전달.

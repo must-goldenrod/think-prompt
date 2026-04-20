@@ -1,6 +1,6 @@
 # docs/ · 설계 & 기획 문서 인덱스
 
-> Pro-Prompt — Claude Code 프롬프트 수집·코칭 서비스.
+> Think-Prompt — Claude Code 프롬프트 수집·코칭 서비스.
 
 ### 👉 처음이면 먼저 읽으세요
 - **[GUIDE.md](./GUIDE.md)** — 초보자용 완전 입문 가이드 (설치부터 고급 기능까지)

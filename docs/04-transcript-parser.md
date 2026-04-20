@@ -99,7 +99,7 @@ export function extractFinalAssistantText(events: TranscriptEvent[]): string | n
 
 - 같은 트랜스크립트가 여러 번 큐에 들어와도 **멱등**.
 - `subagent_invocations.prompt_hash`와 `quality_scores`의 존재 여부로 "이미 처리됨" 판정.
-- 재처리는 `pro-prompt reprocess --session <id>` 로만 강제 가능.
+- 재처리는 `think-prompt reprocess --session <id>` 로만 강제 가능.
 
 ---
 

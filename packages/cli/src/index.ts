@@ -14,7 +14,7 @@ import { wipeCmd } from './commands/wipe.js';
 const program = new Command();
 
 program
-  .name('pro-prompt')
+  .name('think-prompt')
   .description('Claude Code prompt collector + quality coach (local-first)')
   .version('0.1.0');
 
@@ -23,7 +23,7 @@ program.command('install').description('install hooks + start daemons').action(i
 program
   .command('uninstall')
   .description('remove hooks + stop daemons (data preserved unless --purge)')
-  .option('--purge', 'also delete ~/.pro-prompt/')
+  .option('--purge', 'also delete ~/.think-prompt/')
   .action(uninstallCmd);
 
 program.command('start').description('start agent + worker daemons').action(startCmd);

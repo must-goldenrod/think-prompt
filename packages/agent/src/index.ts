@@ -1,5 +1,5 @@
 import { existsSync, writeFileSync } from 'node:fs';
-import { createLogger, getPaths, loadConfig } from '@pro-prompt/core';
+import { createLogger, getPaths, loadConfig } from '@think-prompt/core';
 import { buildAgentServer } from './server.js';
 
 const paths = getPaths();

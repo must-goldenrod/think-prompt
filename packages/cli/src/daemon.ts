@@ -7,7 +7,7 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getPaths } from '@pro-prompt/core';
+import { getPaths } from '@think-prompt/core';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,7 +39,7 @@ function resolveEntry(role: Role): string {
   const require = createRequire(import.meta.url);
   // Resolve the package's main entry. Works in a published npm install.
   try {
-    return require.resolve(`@pro-prompt/${role}`);
+    return require.resolve(`@think-prompt/${role}`);
   } catch {
     // Fallback: monorepo relative path (for dev).
     return require.resolve(`../../${role}/dist/index.js`);

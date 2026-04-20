@@ -16,7 +16,7 @@ export interface Paths {
 }
 
 export function getPaths(rootOverride?: string): Paths {
-  const root = rootOverride ?? process.env.PRO_PROMPT_HOME ?? join(homedir(), '.pro-prompt');
+  const root = rootOverride ?? process.env.THINK_PROMPT_HOME ?? join(homedir(), '.think-prompt');
   return {
     root,
     dbFile: join(root, 'prompts.db'),
@@ -29,6 +29,6 @@ export function getPaths(rootOverride?: string): Paths {
     workerLog: join(root, 'worker.log'),
     rulesCacheFile: join(root, 'rules-cache.json'),
     claudeSettings:
-      process.env.PRO_PROMPT_CLAUDE_SETTINGS ?? join(homedir(), '.claude', 'settings.json'),
+      process.env.THINK_PROMPT_CLAUDE_SETTINGS ?? join(homedir(), '.claude', 'settings.json'),
   };
 }

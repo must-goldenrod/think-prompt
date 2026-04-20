@@ -1,5 +1,5 @@
 {
-  "name": "@pro-prompt/rules",
+  "name": "@think-prompt/rules",
   "version": "0.1.0",
   "description": "Antipattern rules R001..R012",
   "type": "module",

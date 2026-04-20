@@ -1,4 +1,4 @@
-import { openDb } from '@pro-prompt/core';
+import { openDb } from '@think-prompt/core';
 import pc from 'picocolors';
 
 export async function listCmd(opts: {

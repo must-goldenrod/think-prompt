@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { getMeta, getPaths, loadConfig, openDb } from '@pro-prompt/core';
+import { getMeta, getPaths, loadConfig, openDb } from '@think-prompt/core';
 import pc from 'picocolors';
 import { status } from '../daemon.js';
 import { hooksPresent } from '../settings-merge.js';
@@ -7,14 +7,14 @@ import { hooksPresent } from '../settings-merge.js';
 export async function doctorCmd(): Promise<void> {
   const paths = getPaths();
   const config = loadConfig();
-  console.log(pc.bold('Pro-Prompt Doctor'));
+  console.log(pc.bold('Think-Prompt Doctor'));
   console.log('─────────────────');
 
   // Settings
   if (hooksPresent(paths.claudeSettings)) {
     console.log(pc.green('✓') + ` hooks installed in ${paths.claudeSettings}`);
   } else if (existsSync(paths.claudeSettings)) {
-    console.log(pc.yellow('⚠') + ' hooks NOT present — run `pro-prompt install`');
+    console.log(pc.yellow('⚠') + ' hooks NOT present — run `think-prompt install`');
   } else {
     console.log(pc.yellow('⚠') + ` ${paths.claudeSettings} does not exist yet`);
   }
