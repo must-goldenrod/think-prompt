@@ -1,5 +1,7 @@
 version: 2
 updates:
+  # npm: only patch + minor (no auto major bumps — those need manual review).
+  # No groups — each package gets its own PR so we can evaluate individually.
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -7,12 +9,11 @@ updates:
       day: monday
       time: "05:00"
       timezone: Asia/Seoul
-    open-pull-requests-limit: 5
-    groups:
-      dev-dependencies:
-        dependency-type: development
-      runtime:
-        dependency-type: production
+    open-pull-requests-limit: 8
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     labels:
       - dependencies
 
@@ -20,5 +21,9 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     labels:
       - ci
