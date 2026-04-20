@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Design docs
+    url: https://github.com/must-goldenrod/think-prompt/tree/main/docs
+    about: Browse the decision log, hook design, rule engine, and build plan before filing.
