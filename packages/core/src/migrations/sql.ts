@@ -151,3 +151,21 @@ CREATE TABLE IF NOT EXISTS outcomes (
 CREATE INDEX IF NOT EXISTS idx_outcomes_usage ON outcomes(usage_id);
 CREATE INDEX IF NOT EXISTS idx_outcomes_rating ON outcomes(rating);
 `;
+
+/**
+ * v0.3.0 schema additions — multi-source ingest (browser extension).
+ *   - prompt_usages.browser_session_id   identifier assigned by the extension (URL-derived)
+ *   - index on sessions.source (column existed since v1; index is new)
+ *
+ * `sessions.source` column already exists since MIGRATION_001 (originally
+ * used for Claude Code "startup / resume / clear / compact" tags).
+ * We now overload it for `'claude-code' | 'chatgpt' | 'claude-ai' | ...`
+ * and let upsertSession default to 'claude-code' when unset.
+ *
+ * See docs/09-browser-extension-design.md §7.
+ */
+export const MIGRATION_003: string = `
+ALTER TABLE prompt_usages ADD COLUMN browser_session_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_sessions_source ON sessions(source);
+UPDATE sessions SET source = 'claude-code' WHERE source IS NULL;
+`;

@@ -43,6 +43,21 @@ export const StopPayload = BaseHookPayload.extend({
   stop_hook_active: z.boolean().optional(),
 });
 
+/**
+ * /v1/ingest/web — posted by the browser extension when the user submits a
+ * prompt on a supported LLM web UI. See docs/09-browser-extension-design.md.
+ */
+export const WebIngestPayload = z.object({
+  source: z.enum(['chatgpt', 'claude-ai', 'gemini', 'perplexity', 'genspark', 'mistral', 'other']),
+  browser_session_id: z.string().min(1),
+  prompt_text: z.string().min(1),
+  pii_masked: z.string().optional(),
+  pii_hits: z.record(z.string(), z.number()).optional(),
+  created_at: z.string().optional(),
+});
+
+export type WebIngest = z.infer<typeof WebIngestPayload>;
+
 export type UserPromptSubmit = z.infer<typeof UserPromptSubmitPayload>;
 export type SessionStart = z.infer<typeof SessionStartPayload>;
 export type SubagentStart = z.infer<typeof SubagentStartPayload>;

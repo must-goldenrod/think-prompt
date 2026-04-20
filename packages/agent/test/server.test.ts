@@ -192,4 +192,44 @@ describe('agent server', () => {
     expect(res.statusCode).toBe(200);
     await app.close();
   });
+
+  it('/v1/ingest/web stores + scores + returns tier', async () => {
+    const app = buildAgentServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/ingest/web',
+      payload: {
+        source: 'chatgpt',
+        browser_session_id: 'c-abc-123',
+        prompt_text: 'fix',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.tier).toBeDefined();
+    expect(Array.isArray(body.hits)).toBe(true);
+    await app.close();
+  });
+
+  it('/v1/ingest/web tags sessions with the given source', async () => {
+    const { openDb } = await import('@think-prompt/core');
+    const app = buildAgentServer({ rootOverride: tmp });
+    await app.inject({
+      method: 'POST',
+      url: '/v1/ingest/web',
+      payload: {
+        source: 'claude-ai',
+        browser_session_id: 'c-xyz-777',
+        prompt_text: 'please refactor this function',
+      },
+    });
+    await app.close();
+    const db = openDb(tmp);
+    const row = db.prepare(`SELECT source FROM sessions WHERE id = ?`).get('claude-ai:c-xyz-777') as
+      | { source: string }
+      | undefined;
+    expect(row?.source).toBe('claude-ai');
+    db.close();
+  });
 });

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "types": ["chrome", "node"],
+    "outDir": "dist-types",
+    "rootDir": "src",
+    "noEmit": true
+  },
+  "include": ["src/**/*", "build.mjs"],
+  "exclude": ["dist", "node_modules", "test"]
+}

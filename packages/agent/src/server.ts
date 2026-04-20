@@ -6,6 +6,7 @@ import {
   SubagentStartPayload,
   SubagentStopPayload,
   UserPromptSubmitPayload,
+  WebIngestPayload,
   bumpToolRollup,
   createLogger,
   endSession,
@@ -250,6 +251,102 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
     } catch (err) {
       logger.error({ err }, 'stop failed');
       if (config.agent.fail_open) return {};
+      throw err;
+    }
+  });
+
+  // /v1/ingest/web — prompts captured by the browser extension.
+  // See docs/09-browser-extension-design.md §7.
+  fastify.post('/v1/ingest/web', async (req) => {
+    const t0 = Date.now();
+    try {
+      const p = WebIngestPayload.parse(req.body);
+      const sessionId = `${p.source}:${p.browser_session_id}`;
+
+      upsertSession(db, {
+        id: sessionId,
+        cwd: `web:${p.source}`,
+        source: p.source,
+      });
+
+      const usage = insertPromptUsage(db, {
+        session_id: sessionId,
+        prompt_text: p.prompt_text,
+        browser_session_id: p.browser_session_id,
+      });
+
+      // Parse PII hits already computed by the extension (if any) + merge
+      // with server-side masker which runs inside insertPromptUsage.
+      let piiHits: Record<string, number> | undefined;
+      if (usage.pii_hits) {
+        try {
+          const parsed = JSON.parse(usage.pii_hits);
+          if (parsed && typeof parsed === 'object') {
+            piiHits = parsed as Record<string, number>;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (p.pii_hits) {
+        piiHits = { ...(piiHits ?? {}), ...p.pii_hits };
+      }
+
+      const hits = runRules({
+        promptText: p.prompt_text,
+        session: { cwd: `web:${p.source}` },
+        meta: {
+          charLen: usage.char_len,
+          wordCount: usage.word_count,
+          piiHits,
+        },
+      });
+      for (const h of hits) {
+        insertRuleHit(db, {
+          usage_id: usage.id,
+          rule_id: h.ruleId,
+          severity: h.severity,
+          message: h.message,
+          evidence: h.evidence ?? undefined,
+        });
+      }
+      const ruleScore = computeRuleScore(hits);
+      const { final_score, tier } = composeFinalScore({
+        rule_score: ruleScore,
+        usage_score: null,
+        judge_score: null,
+      });
+      upsertQualityScore(db, {
+        usage_id: usage.id,
+        rule_score: ruleScore,
+        final_score,
+        tier,
+        rules_version: 1,
+      });
+
+      const ms = Date.now() - t0;
+      logger.info(
+        {
+          source: p.source,
+          browser_session_id: p.browser_session_id,
+          usage_id: usage.id,
+          score: final_score,
+          tier,
+          hits: hits.length,
+          ms,
+        },
+        'web-ingest'
+      );
+      return {
+        ok: true,
+        usage_id: usage.id,
+        score: final_score,
+        tier,
+        hits: hits.map((h) => ({ rule_id: h.ruleId, severity: h.severity, message: h.message })),
+      };
+    } catch (err) {
+      logger.error({ err }, 'web-ingest failed');
+      if (config.agent.fail_open) return { ok: false };
       throw err;
     }
   });

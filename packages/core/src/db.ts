@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import Database, { type Database as Db } from 'better-sqlite3';
 import { detectLanguage } from './lang.js';
-import { MIGRATION_001, MIGRATION_002 } from './migrations/sql.js';
+import { MIGRATION_001, MIGRATION_002, MIGRATION_003 } from './migrations/sql.js';
 import { getPaths } from './paths.js';
 import { maskPii } from './pii.js';
 import { ulid } from './ulid.js';
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 export function openDb(rootOverride?: string): Db {
   const paths = getPaths(rootOverride);
@@ -33,6 +33,7 @@ function runMigrations(db: Db): void {
   const migrations: Array<{ v: number; sql: string }> = [
     { v: 1, sql: MIGRATION_001 },
     { v: 2, sql: MIGRATION_002 },
+    { v: 3, sql: MIGRATION_003 },
   ];
   for (const m of migrations) {
     if (m.v <= current) continue;
@@ -79,6 +80,7 @@ export interface PromptUsageRow {
   turn_index: number;
   coach_context: string | null;
   detected_language: string | null;
+  browser_session_id: string | null;
 }
 
 export function upsertSession(
@@ -94,10 +96,11 @@ export function upsertSession(
   const now = new Date().toISOString();
   db.prepare(
     `INSERT INTO sessions(id, cwd, model, source, started_at, transcript_path)
-     VALUES (@id, @cwd, @model, @source, @started_at, @transcript_path)
+     VALUES (@id, @cwd, @model, COALESCE(@source, 'claude-code'), @started_at, @transcript_path)
      ON CONFLICT(id) DO UPDATE SET
        cwd=COALESCE(excluded.cwd, sessions.cwd),
        model=COALESCE(excluded.model, sessions.model),
+       source=COALESCE(excluded.source, sessions.source),
        transcript_path=COALESCE(excluded.transcript_path, sessions.transcript_path)`
   ).run({
     id: s.id,
@@ -120,6 +123,7 @@ export interface InsertPromptUsageInput {
   prompt_text: string;
   turn_index?: number;
   coach_context?: string | null;
+  browser_session_id?: string | null;
 }
 
 export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): PromptUsageRow {
@@ -144,9 +148,11 @@ export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): Prompt
 
   db.prepare(
     `INSERT INTO prompt_usages(id, session_id, prompt_text, prompt_hash, pii_masked, pii_hits,
-                                char_len, word_count, created_at, turn_index, coach_context, detected_language)
+                                char_len, word_count, created_at, turn_index, coach_context,
+                                detected_language, browser_session_id)
      VALUES (@id,@session_id,@prompt_text,@prompt_hash,@pii_masked,@pii_hits,
-             @char_len,@word_count,@created_at,@turn_index,@coach_context,@detected_language)`
+             @char_len,@word_count,@created_at,@turn_index,@coach_context,
+             @detected_language,@browser_session_id)`
   ).run({
     id,
     session_id: input.session_id,
@@ -160,6 +166,7 @@ export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): Prompt
     turn_index: turnIndex,
     coach_context: input.coach_context ?? null,
     detected_language: language,
+    browser_session_id: input.browser_session_id ?? null,
   });
 
   return {
@@ -175,6 +182,7 @@ export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): Prompt
     turn_index: turnIndex,
     coach_context: input.coach_context ?? null,
     detected_language: language,
+    browser_session_id: input.browser_session_id ?? null,
   };
 }
 
