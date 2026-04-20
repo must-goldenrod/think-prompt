@@ -91,11 +91,21 @@ export async function handleParseTranscript(
         `SELECT COUNT(*) AS c FROM prompt_usages WHERE prompt_hash=? AND session_id=? AND id < ?`
       )
       .get(u.prompt_hash, payload.session_id, u.id) as { c: number };
+    const fb = ctx.db
+      .prepare(
+        `SELECT
+            SUM(CASE WHEN rating='up' THEN 1 ELSE 0 END) AS ups,
+            SUM(CASE WHEN rating='down' THEN 1 ELSE 0 END) AS downs
+           FROM outcomes WHERE usage_id = ?`
+      )
+      .get(u.id) as { ups: number | null; downs: number | null };
     const usageScore = computeUsageScore({
       toolCalls: calls,
       toolFails: fails,
       reuseCount: hashSeenBefore.c,
       responseLength: 0, // unknown per-usage without deeper correlation
+      feedbackUps: fb.ups ?? 0,
+      feedbackDowns: fb.downs ?? 0,
     });
     const existing = ctx.db
       .prepare(`SELECT rule_score, judge_score FROM quality_scores WHERE usage_id=?`)

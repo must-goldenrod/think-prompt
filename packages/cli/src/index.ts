@@ -3,6 +3,7 @@ import { coachCmd, configGetCmd, configListCmd, configSetCmd } from './commands/
 import { restartCmd, startCmd, statusCmd, stopCmd } from './commands/daemon-cmds.js';
 import { doctorCmd } from './commands/doctor.js';
 import { exportCmd, reprocessCmd } from './commands/export-reprocess.js';
+import { feedbackCmd } from './commands/feedback.js';
 import { installCmd } from './commands/install.js';
 import { listCmd } from './commands/list.js';
 import { openCmd } from './commands/open.js';
@@ -49,6 +50,12 @@ program
   .action(rewriteCmd);
 
 program.command('coach <state>').description('toggle inline coach mode (on/off)').action(coachCmd);
+
+program
+  .command('feedback <id> <rating>')
+  .description('record 👍/👎 feedback for a prompt (rating = up | down)')
+  .option('--note <text>', 'optional free-form note')
+  .action(feedbackCmd);
 
 const config = program.command('config').description('get/set/list config');
 config

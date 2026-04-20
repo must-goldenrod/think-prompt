@@ -1,4 +1,12 @@
-import { type Config, createLogger, getPaths, loadConfig, openDb } from '@think-prompt/core';
+import {
+  type Config,
+  createLogger,
+  getOutcomeTotals,
+  getPaths,
+  loadConfig,
+  openDb,
+  recordOutcome,
+} from '@think-prompt/core';
 import { getRulesCatalog } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { escapeHtml, layout, tierBadge } from './html.js';
@@ -14,6 +22,22 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
   const logger = createLogger('dashboard', { file: paths.workerLog, stdout: false });
   const fastify = Fastify({ logger: false });
   const db = openDb(deps.rootOverride);
+
+  // Parse application/x-www-form-urlencoded for the feedback form POSTs.
+  fastify.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_req, body, done) => {
+      try {
+        const params = new URLSearchParams(body as string);
+        const out: Record<string, string> = {};
+        for (const [k, v] of params) out[k] = v;
+        done(null, out);
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    }
+  );
 
   fastify.get('/health', async () => ({ ok: true }));
 
@@ -186,13 +210,30 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const rewrites = db
       .prepare(`SELECT * FROM rewrites WHERE usage_id=? ORDER BY created_at DESC`)
       .all(id) as any[];
+    const fb = getOutcomeTotals(db, id);
+    const lang = u.detected_language ?? '?';
 
     const body = `
       <div class="mb-3"><a href="/prompts" class="text-blue-600 text-sm">← back</a></div>
       <h1 class="text-2xl font-bold mb-2">Prompt ${escapeHtml(u.id.slice(-8))}</h1>
       <div class="text-xs text-gray-500 mb-4">
         session <a class="underline" href="/sessions/${u.session_id}">${escapeHtml(u.session_id)}</a>
-        · ${u.char_len} chars · ${u.word_count} words · turn ${u.turn_index} · ${escapeHtml(u.created_at)}
+        · ${u.char_len} chars · ${u.word_count} words · turn ${u.turn_index}
+        · <span class="uppercase">${escapeHtml(lang)}</span>
+        · ${escapeHtml(u.created_at)}
+      </div>
+
+      <div class="mb-4 flex items-center gap-3">
+        <span class="text-xs text-gray-500">Feedback:</span>
+        <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
+          <input type="hidden" name="rating" value="up" />
+          <button class="px-3 py-1 rounded border border-green-300 bg-green-50 dark:bg-green-900 hover:bg-green-100 text-sm">👍 ${fb.ups}</button>
+        </form>
+        <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
+          <input type="hidden" name="rating" value="down" />
+          <button class="px-3 py-1 rounded border border-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 text-sm">👎 ${fb.downs}</button>
+        </form>
+        <span class="text-xs text-gray-400">(reprocess after session end to update usage_score)</span>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -418,6 +459,30 @@ think-prompt coach on</pre>
         <p class="text-sm text-gray-500">${escapeHtml(agentPid?.value ?? 'unknown')}</p>
       </div>`;
     reply.type('text/html; charset=utf-8').send(layout('Doctor', body));
+  });
+
+  // POST /prompts/:id/feedback — form-encoded {rating: up|down, note?}
+  fastify.post<{
+    Params: { id: string };
+    Body: { rating?: string; note?: string };
+  }>('/prompts/:id/feedback', async (req, reply) => {
+    const { id } = req.params;
+    const body = (req.body ?? {}) as { rating?: string; note?: string };
+    const rating = body.rating;
+    if (rating !== 'up' && rating !== 'down') {
+      reply.code(400).type('text/plain').send('rating must be up or down');
+      return;
+    }
+    const row = db.prepare(`SELECT id FROM prompt_usages WHERE id=?`).get(id) as
+      | { id: string }
+      | undefined;
+    if (!row) {
+      reply.code(404).type('text/plain').send('prompt not found');
+      return;
+    }
+    recordOutcome(db, id, rating, body.note ?? null);
+    // Redirect back to the detail page
+    reply.redirect(`/prompts/${id}`);
   });
 
   fastify.addHook('onClose', async () => {

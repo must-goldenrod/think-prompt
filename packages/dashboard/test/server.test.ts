@@ -68,4 +68,28 @@ describe('dashboard', () => {
     expect(res.body).toContain('R001');
     await app.close();
   });
+
+  it('records feedback via POST /prompts/:id/feedback', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-fb', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-fb', prompt_text: 'fix' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/prompts/${u.id}/feedback`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'rating=up',
+    });
+    expect([200, 302]).toContain(res.statusCode);
+
+    const db2 = openDb();
+    const count = db2
+      .prepare(`SELECT COUNT(*) AS c FROM outcomes WHERE usage_id=? AND rating='up'`)
+      .get(u.id) as { c: number };
+    expect(count.c).toBe(1);
+    db2.close();
+    await app.close();
+  });
 });
