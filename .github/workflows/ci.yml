@@ -26,7 +26,9 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile=false
+      # Build first so workspace packages can resolve each other's .d.ts
+      # during the typecheck pass (agent/worker/dashboard/cli depend on core).
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
-      - run: pnpm build

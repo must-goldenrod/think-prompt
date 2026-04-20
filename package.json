@@ -15,7 +15,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "ci": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "ci": "pnpm build && pnpm typecheck && pnpm lint && pnpm test",
     "clean": "pnpm -r exec rm -rf dist node_modules/.cache"
   },
   "devDependencies": {
