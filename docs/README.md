@@ -19,6 +19,7 @@
 | 05 | [quality-engine.md](./05-quality-engine.md) | 룰셋 v0 · 스코어 공식 · LLM 심판 · 리라이터 |
 | 06 | [coaching-ux.md](./06-coaching-ux.md) | 대시보드 · 인라인 코칭 · CLI |
 | 07 | [build-and-test-plan.md](./07-build-and-test-plan.md) | **M-1 → M9 마일스톤 + 유저 테스트 절차** |
+| 08 | [quality-criteria.md](./08-quality-criteria.md) | **62개 품질 기준 분류 · 검증 방법론** (living doc) |
 | 99 | [observation-log.md](./99-observation-log.md) | 실측·관찰 기록 (M0에서 주로 채움) |
 | — | [proposal-draft.md](./proposal-draft.md) | 초기 제안서 (문맥 · 비교 · 확정 전 초안) |
 | — | [conversation-log.md](./conversation-log.md) | 주요 대화·논의의 맥락 기록 |
