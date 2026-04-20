@@ -79,7 +79,10 @@ export const INJECTION_PATTERNS: RegExp[] = [
   /<\|im_start\|>/i,
   /<\|im_end\|>/i,
   /you\s+are\s+now\s+a\s+different/i,
-  /이전\s+(명령|지시|프롬프트)\s*(무시|잊어)/u,
+  // Allow short intervening words (e.g. "이전 지시 다 무시하고").
+  /이전\s+(?:명령|지시|프롬프트).{0,20}(?:무시|잊어)/u,
+  /시스템\s*프롬프트/u,
+  /새로운\s+(?:인격|역할|정체성)/u,
 ];
 
 export const QUESTION_MARKERS: RegExp[] = [
