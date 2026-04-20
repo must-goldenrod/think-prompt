@@ -1,0 +1,34 @@
+{
+  "name": "@pro-prompt/agent",
+  "version": "0.1.0",
+  "description": "Local HTTP agent receiving Claude Code hooks",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "pro-prompt-agent": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@pro-prompt/core": "workspace:*",
+    "@pro-prompt/rules": "workspace:*",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8"
+  }
+}

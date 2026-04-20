@@ -1,0 +1,33 @@
+{
+  "name": "@pro-prompt/worker",
+  "version": "0.1.0",
+  "description": "Background worker: transcript parsing, LLM judge, rewriter",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "pro-prompt-worker": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@pro-prompt/core": "workspace:*",
+    "@pro-prompt/rules": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8"
+  }
+}

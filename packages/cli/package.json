@@ -1,0 +1,31 @@
+{
+  "name": "@pro-prompt/cli",
+  "version": "0.1.0",
+  "description": "Pro-Prompt CLI — install, start/stop, list, doctor, rewrite",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "pro-prompt": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pro-prompt/agent": "workspace:*",
+    "@pro-prompt/core": "workspace:*",
+    "@pro-prompt/dashboard": "workspace:*",
+    "@pro-prompt/rules": "workspace:*",
+    "@pro-prompt/worker": "workspace:*",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8"
+  }
+}

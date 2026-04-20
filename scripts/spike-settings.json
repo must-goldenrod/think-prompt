@@ -1,0 +1,77 @@
+{
+  "_comment": "Append these hook blocks into ~/.claude/settings.json (merge with existing). Run scripts/spike-hook.sh with the event name for each.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/mufin/projects/think-prompt/scripts/spike-hook.sh UserPromptSubmit",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/mufin/projects/think-prompt/scripts/spike-hook.sh SessionStart",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/mufin/projects/think-prompt/scripts/spike-hook.sh SubagentStart",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/mufin/projects/think-prompt/scripts/spike-hook.sh SubagentStop",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/mufin/projects/think-prompt/scripts/spike-hook.sh PostToolUse",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/mufin/projects/think-prompt/scripts/spike-hook.sh Stop",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
