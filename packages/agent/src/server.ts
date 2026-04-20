@@ -119,6 +119,9 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
       });
 
       // Coaching hint injection (D-021)
+      // Response must follow Claude Code UserPromptSubmit hook spec:
+      //   { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: "..." } }
+      // See https://code.claude.com/docs/en/hooks (UserPromptSubmit).
       let response: Record<string, unknown> = {};
       if (config.agent.coach_mode && (final_score < 65 || hits.some((h) => h.severity >= 3))) {
         const issueLines = hits
@@ -135,7 +138,12 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
           'or proceed while explicitly stating your assumptions.',
           '[end hint]',
         ].join('\n');
-        response = { additionalContext: hint };
+        response = {
+          hookSpecificOutput: {
+            hookEventName: 'UserPromptSubmit',
+            additionalContext: hint,
+          },
+        };
         db.prepare(`UPDATE prompt_usages SET coach_context=? WHERE id=?`).run(hint, usage.id);
       }
 
