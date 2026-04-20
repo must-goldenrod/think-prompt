@@ -77,7 +77,103 @@ describe('agent server', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.additionalContext).toContain('Think-Prompt coaching hint');
+    // Must follow Claude Code UserPromptSubmit hook response spec.
+    // additionalContext belongs inside hookSpecificOutput, not at top level.
+    expect(body.hookSpecificOutput).toBeDefined();
+    expect(body.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
+    expect(body.hookSpecificOutput.additionalContext).toContain('Think-Prompt coaching hint');
+    // Regression guard: ensure the old (incorrect) top-level field is not emitted.
+    expect(body.additionalContext).toBeUndefined();
+    await app.close();
+  });
+
+  it('coach_mode omits hint for good prompts', async () => {
+    const app = buildAgentServer({
+      rootOverride: tmp,
+      config: {
+        version: 1,
+        agent: { port: 0, max_prompt_bytes: 262144, coach_mode: true, fail_open: true },
+        dashboard: { port: 47824, open_on_start: false },
+        privacy: {
+          store_original: true,
+          pii_mask: true,
+          retention_days: 90,
+          sync_to_server: false,
+        },
+        llm: {
+          enabled: false,
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5',
+          api_key_env: 'ANTHROPIC_API_KEY',
+          judge_threshold_score: 60,
+          max_monthly_tokens: 500000,
+        },
+        rules: { enabled_set: 'default', custom_disabled: [] },
+        i18n: 'ko',
+      },
+    });
+    const longGoodPrompt = [
+      'Goal: extract the userId field from the response payload of POST /v1/users.',
+      'Context: Node.js 20 TypeScript service in packages/api using Zod schemas.',
+      'Task: add a narrowing helper that returns the userId or throws a typed error.',
+      'Output format: return a TypeScript code block only, no prose.',
+      'Success criteria: the helper compiles under strict mode and has a unit test.',
+    ].join('\n');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/hook/user-prompt-submit',
+      payload: {
+        session_id: 't2-good',
+        cwd: '/tmp',
+        prompt: longGoodPrompt,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // High-quality prompt: no coach hint should be attached.
+    expect(body.hookSpecificOutput).toBeUndefined();
+    expect(body.additionalContext).toBeUndefined();
+    await app.close();
+  });
+
+  it('coach_mode disabled returns empty response even for bad prompts', async () => {
+    const app = buildAgentServer({
+      rootOverride: tmp,
+      config: {
+        version: 1,
+        agent: { port: 0, max_prompt_bytes: 262144, coach_mode: false, fail_open: true },
+        dashboard: { port: 47824, open_on_start: false },
+        privacy: {
+          store_original: true,
+          pii_mask: true,
+          retention_days: 90,
+          sync_to_server: false,
+        },
+        llm: {
+          enabled: false,
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5',
+          api_key_env: 'ANTHROPIC_API_KEY',
+          judge_threshold_score: 60,
+          max_monthly_tokens: 500000,
+        },
+        rules: { enabled_set: 'default', custom_disabled: [] },
+        i18n: 'ko',
+      },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/hook/user-prompt-submit',
+      payload: {
+        session_id: 't2-off',
+        cwd: '/tmp',
+        prompt: 'fix',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.hookSpecificOutput).toBeUndefined();
+    expect(body.additionalContext).toBeUndefined();
     await app.close();
   });
 
