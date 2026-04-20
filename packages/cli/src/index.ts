@@ -1,4 +1,9 @@
 import { Command } from 'commander';
+import {
+  autostartDisableCmd,
+  autostartEnableCmd,
+  autostartStatusCmd,
+} from './commands/autostart.js';
 import { coachCmd, configGetCmd, configListCmd, configSetCmd } from './commands/config-cmd.js';
 import { restartCmd, startCmd, statusCmd, stopCmd } from './commands/daemon-cmds.js';
 import { doctorCmd } from './commands/doctor.js';
@@ -80,6 +85,19 @@ program
   .action(exportCmd);
 
 program.command('open').description('open local dashboard in browser').action(openCmd);
+
+const autostart = program
+  .command('autostart')
+  .description('manage OS-level auto-start (launchd on macOS, systemd --user on Linux)');
+autostart
+  .command('enable')
+  .description('register & load auto-start units (opt-in, sudo not needed)')
+  .action(autostartEnableCmd);
+autostart
+  .command('disable')
+  .description('unload & remove auto-start units (data preserved)')
+  .action(autostartDisableCmd);
+autostart.command('status').description('show auto-start unit status').action(autostartStatusCmd);
 
 program
   .command('wipe')

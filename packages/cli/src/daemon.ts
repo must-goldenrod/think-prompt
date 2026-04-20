@@ -35,7 +35,7 @@ export function isRunning(pid: number | null): boolean {
   }
 }
 
-function resolveEntry(role: Role): string {
+export function resolveEntry(role: Role): string {
   const require = createRequire(import.meta.url);
   // Resolve the package's main entry. Works in a published npm install.
   try {
