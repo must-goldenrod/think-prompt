@@ -76,10 +76,24 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
         prompt_text: p.prompt,
       });
 
+      // Parse the PII hits JSON we stored on the usage row so R013 can see it.
+      let piiHits: Record<string, number> | undefined;
+      if (usage.pii_hits) {
+        try {
+          const parsed = JSON.parse(usage.pii_hits);
+          if (parsed && typeof parsed === 'object') piiHits = parsed;
+        } catch {
+          // ignore — rule just won't fire
+        }
+      }
       const hits = runRules({
         promptText: p.prompt,
         session: { cwd: p.cwd ?? '/' },
-        meta: { charLen: usage.char_len, wordCount: usage.word_count },
+        meta: {
+          charLen: usage.char_len,
+          wordCount: usage.word_count,
+          piiHits,
+        },
       });
       for (const h of hits) {
         insertRuleHit(db, {

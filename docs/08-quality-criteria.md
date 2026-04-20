@@ -108,15 +108,13 @@
 - **검증 필요:** 대조군 프롬프트 수집 필요
 
 ### C-004 · 단일 태스크 vs 다중 태스크
-- **Status:** prototyped · **Confidence:** high · **Rule:** R004
+- **Status:** validated (v0.1.1) · **Confidence:** high · **Rule:** R004
 - **정의:** 하나의 프롬프트에 복수 독립 작업
-- **현재 감지:** `and` / `그리고` / `또한` 3회 이상
-- **놓치는 패턴 (→ 확장 제안):**
-  - `//` · `,` · `/` 같은 비전통 구분자
-  - 불릿 리스트로 태스크 나열
-  - 개행으로 분리된 명령형 문장들
-- **확장 제안 → R004v2:** 문장 분리 후 각 문장의 명령형 동사 카운트
-- **검증:** 100개 실데이터로 false positive/negative 측정 필요
+- **현재 감지:**
+  - 접속사 경로: `and` / `그리고` / `또한` / `plus` 3회 이상
+  - 구분자 경로(v0.1.1 추가): `//` 또는 `/` 2회 이상 + 명령형 동사 2회 이상
+- **남은 허점:** 개행으로만 분리된 명령문, 불릿 리스트 태스크 나열
+- **검증:** 2026-04-20 dogfooding에서 "요약해줘 // 번역도 // 마크다운으로 // 코드도" 샘플로 발동 확인. 100개 실데이터 regression test는 아직.
 
 ### C-005 · 섹션 순서 (권장 순서) — *미구현*
 - **Status:** hypothesis · **Confidence:** low
@@ -133,9 +131,9 @@
 
 ### C-007 · 코드 덤프 (instruction 없음)
 - **Status:** validated · **Confidence:** high · **Rule:** R012
-- **현재 threshold:** 코드블록이 본문의 **80% 이상**
-- **놓치는 패턴:** 70% 코드 + 짧은 질문("이거 왜?") → 감지 안 됨. threshold 조정 또는 복합 룰 필요.
-- **개선 제안:** threshold 65%로 완화 + "짧은 질문은 더 엄격"
+- **현재 threshold (v0.1.1):** 코드블록이 본문의 **65% 이상**
+- **히스토리:** 원래 80% → 도그푸딩에서 70% 코드 + 짧은 질문 패턴이 놓쳐져 65%로 완화.
+- **검증:** 2026-04-20 샘플(7줄 코드 + "이거 뭐지?") 발동 확인.
 
 ### C-008 · 구분자 사용 일관성 — *미구현*
 - **Status:** hypothesis · **Confidence:** low
@@ -227,10 +225,13 @@
 ### C-022 · 대명사 모호성
 - **Status:** validated · **Confidence:** high · **Rule:** R007
 
-### C-023 · 모호한 부사 ("좀/대충/적당히") — *미구현*
-- **Status:** hypothesis · **Confidence:** medium
-- **감지 방법:** 한국어: `좀|대충|적당히|그냥|알아서`, 영어: `somewhat|kinda|sorta|maybe|probably|like`
-- **severity 제안:** sev 2 — 심하진 않지만 경고
+### C-023 · 모호한 부사 ("좀/대충/적당히")
+- **Status:** prototyped (v0.1.1) · **Confidence:** medium · **Rule:** R014
+- **감지:**
+  - 한국어: `좀|대충|적당히|그냥|알아서|어떻게든|막|아무거나|뭔가`
+  - 영어: `kinda|sorta|somewhat|maybe|probably|whatever|anyhow`
+- **severity:** 2
+- **검증:** "이 함수 좀 리팩터해줘" 샘플에서 발동 확인. 대규모 false-positive 측정 미실시.
 
 ### C-024 · 정량화 가능한 표현 부재 — *미구현*
 - **Status:** hypothesis · **Confidence:** medium
@@ -303,10 +304,10 @@
 ### C-035 · 프롬프트 인젝션 유도
 - **Status:** validated · **Confidence:** high · **Rule:** R005 (sev 5)
 
-### C-036 · PII 노출 (프롬프트 내) — *부분 구현*
-- **Status:** prototyped · **Confidence:** high
-- **현재:** `packages/core/src/pii.ts` 가 저장 전 마스킹. 스코어엔 반영 안 됨.
-- **제안:** PII 감지 시 `C-036` 룰로 경고 (저장은 되지만 유저 주의 환기)
+### C-036 · PII 노출 (프롬프트 내)
+- **Status:** prototyped (v0.1.1) · **Confidence:** high · **Rule:** R013
+- **현재:** `packages/core/src/pii.ts` 가 저장 전 마스킹 + `R013`이 스코어에 반영 (severity 1~3, 카테고리 수에 따라 escalate)
+- **검증:** "유저 john@example.com 전화 010-1234-5678 …" 샘플에서 `email, phone_kr` 2종 감지 + sev=2 발동 확인.
 
 ### C-037 · 해로운 의도 패턴 — *미구현*
 - **Status:** hypothesis · **Confidence:** low
@@ -375,6 +376,9 @@
 ---
 
 ## 11. MLG — 다국어·혼용
+
+### C-049 일본어 · C-050 중국어 부분 커버 (v0.1.1)
+`R003 no_context`의 키워드 사전에 일본어(`プロジェクト/コード/ファイル/関数/クラス/モジュール/ユーザー`) 및 간체·번체 중국어(`项目/代码/文件/函数/类/模块/用户/專案/代碼庫/檔案/函數/模組/使用者`)가 포함됨. 맥락 감지만 가능하며, 일본어/중국어용 메시지·기타 룰은 C-051 auto-detect 구현 후 확장.
 
 ### C-048 · 한·영 혼용 적절성 — *미구현*
 - **Status:** hypothesis · **Confidence:** medium
@@ -500,7 +504,16 @@ C-021(예시 적절성) — 룰(존재) + LLM(품질)
 | R011 question_without_context | C-009 + C-045 부분 | |
 | R012 code_dump_no_instruction | C-007 | threshold 조정 검토 |
 
-**커버 criterion: 12 / 62 = 19.4%.** 갈 길이 멀다.
+**커버 criterion: 14 / 62 = 22.6% (v0.1.1 기준).** 계속 확장 중.
+
+### v0.1.1 변경 요약
+- R004 확장(C-004): `//` · `/` 구분자 패턴 추가
+- R012 threshold 80% → 65%(C-007)
+- R003 키워드 다국어 확장(C-009, C-049 부분, C-050 부분)
+- R013 신규(C-036): PII-aware 경고 (severity 1~3 escalating)
+- R014 신규(C-023): 모호 부사 감지 (ko/en)
+
+**테스트 커버리지:** 64/64 통과 (11개 신규 테스트 추가, 53→64).
 
 ---
 
@@ -640,7 +653,7 @@ Criterion별:
 | 날짜 | 변경 | 작성자 |
 |---|---|---|
 | 2026-04-20 | v0 초안 — 62 criterion 분류, 12 대분류, 검증 방법론 | 초기 |
-| — | (다음 업데이트 여기 append) | — |
+| 2026-04-20 | v0.1.1 구현 — R004 확장 · R012 threshold · R003 다국어 · R013 신규 · R014 신규. 커버율 19.4% → 22.6% | v0.1.1 |
 
 ---
 
@@ -667,7 +680,7 @@ Criterion별:
 | C-001 | 단어 수 과소 | STR | R001 | ✅ validated |
 | C-002 | 긴데 예시 없음 | STR | R008 | ⚠️ medium |
 | C-003 | 산만함 | STR | — | 🧪 hypothesis |
-| C-004 | 다중 태스크 | STR | R004 | ✅ validated |
+| C-004 | 다중 태스크 | STR | R004 v2 | ✅ validated (// 구분자 추가) |
 | C-005 | 섹션 순서 | STR | — | 🧪 hypothesis |
 | C-006 | 질문/명령 혼재 | STR | — | 🧪 hypothesis |
 | C-007 | 코드 덤프 | STR | R012 | ✅ validated |
@@ -686,7 +699,7 @@ Criterion별:
 | C-020 | 성공 기준 | OUT | R006 | ✅ validated |
 | C-021 | 예시 적절성 | OUT | — | 🧪 hypothesis |
 | C-022 | 대명사 모호 | CLR | R007 | ✅ validated |
-| C-023 | 모호 부사 | CLR | — | 🧪 hypothesis |
+| C-023 | 모호 부사 | CLR | R014 | ⚠️ prototyped |
 | C-024 | 비정량 표현 | CLR | — | 🧪 hypothesis |
 | C-025 | 띄어쓰기/구두점 | CLR | — | 🧪 hypothesis |
 | C-026 | 명령형 동사 | CLR | R009 | ✅ validated |
@@ -699,7 +712,7 @@ Criterion별:
 | C-033 | 과도한 경어 | LNG | — | 🧪 hypothesis |
 | C-034 | 욕설 | LNG | — | 🧪 hypothesis |
 | C-035 | 프롬프트 인젝션 | SAF | R005 | ✅ validated |
-| C-036 | PII 노출 | SAF | (pii.ts) | ⚠️ 부분 |
+| C-036 | PII 노출 | SAF | R013 + pii.ts | ⚠️ prototyped |
 | C-037 | 해로운 의도 | SAF | — | 🧪 low |
 | C-038 | 저작권 위반 | SAF | — | 🧪 low |
 | C-039 | 민감 정보 유도 | SAF | — | 🧪 low |
@@ -712,8 +725,8 @@ Criterion별:
 | C-046 | 재요청 구체성 | CNV | — | 🧪 hypothesis |
 | C-047 | 세션 과다 | CNV | — | 🧪 hypothesis |
 | C-048 | 한·영 혼용 | MLG | — | 🧪 hypothesis |
-| C-049 | 일본어 | MLG | — | 🧪 low |
-| C-050 | 중국어 | MLG | — | 🧪 low |
+| C-049 | 일본어 | MLG | R003 부분 | ⚠️ 부분 (컨텍스트만) |
+| C-050 | 중국어 | MLG | R003 부분 | ⚠️ 부분 (컨텍스트만, 간/번체) |
 | C-051 | 언어 감지 | MLG | — | 🧪 hypothesis |
 | C-052 | 스택 명시 | COD | R003 부분 | ⚠️ 부분 |
 | C-053 | 컴파일/런타임 | COD | — | 🧪 low |

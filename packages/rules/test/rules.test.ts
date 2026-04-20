@@ -2,20 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { ALL_RULES, runRules } from '../src/index.js';
 import type { DetectInput } from '../src/types.js';
 
-function input(text: string): DetectInput {
+function input(text: string, extra?: { piiHits?: Record<string, number> }): DetectInput {
   return {
     promptText: text,
     session: { cwd: '/tmp' },
     meta: {
       charLen: text.length,
       wordCount: text.trim().split(/\s+/).filter(Boolean).length,
+      ...(extra?.piiHits ? { piiHits: extra.piiHits } : {}),
     },
   };
 }
 
 describe('rules', () => {
-  it('has 12 rules', () => {
-    expect(ALL_RULES).toHaveLength(12);
+  it('has 14 rules', () => {
+    expect(ALL_RULES).toHaveLength(14);
   });
 
   describe('R001 too_short', () => {
@@ -56,6 +57,16 @@ describe('rules', () => {
       const hits = runRules(input('summarize it and translate it and write code and add tests'));
       expect(hits.find((h) => h.ruleId === 'R004')).toBeTruthy();
     });
+    it('fires on // separator pattern (C-004 expansion)', () => {
+      const hits = runRules(
+        input('요약해줘 // 번역도 같이 해줘 // 그리고 마크다운 표로 정리해 // 코드 예시도 추가해')
+      );
+      expect(hits.find((h) => h.ruleId === 'R004')).toBeTruthy();
+    });
+    it('does not fire on a single // inside prose', () => {
+      const hits = runRules(input('check https://example.com // official docs for more info'));
+      expect(hits.find((h) => h.ruleId === 'R004')).toBeFalsy();
+    });
   });
 
   describe('R012 code_dump_no_instruction', () => {
@@ -69,6 +80,50 @@ describe('rules', () => {
       const hits = runRules(input(text));
       expect(hits.find((h) => h.ruleId === 'R012')).toBeFalsy();
     });
+    it('fires at the new 65% threshold (previously 80%)', () => {
+      // ~70% code, ~30% short question without an imperative verb
+      const code = '```ts\n' + 'const a = 1;\n'.repeat(20) + '```';
+      const text = `${code}\n이거 뭐지?`;
+      const hits = runRules(input(text));
+      expect(hits.find((h) => h.ruleId === 'R012')).toBeTruthy();
+    });
+  });
+
+  describe('R013 pii_detected', () => {
+    it('fires when piiHits meta is non-empty', () => {
+      const hits = runRules(input('please analyze logs', { piiHits: { email: 1 } }));
+      expect(hits.find((h) => h.ruleId === 'R013')).toBeTruthy();
+    });
+    it('escalates severity with more distinct kinds', () => {
+      const hits = runRules(
+        input('look at this data', {
+          piiHits: { email: 1, phone_kr: 1, rrn: 1 },
+        })
+      );
+      const hit = hits.find((h) => h.ruleId === 'R013');
+      expect(hit?.severity).toBe(3);
+    });
+    it('does not fire without piiHits', () => {
+      const hits = runRules(input('simple safe prompt'));
+      expect(hits.find((h) => h.ruleId === 'R013')).toBeFalsy();
+    });
+  });
+
+  describe('R014 vague_adverb', () => {
+    it('fires on Korean vague adverbs', () => {
+      const hits = runRules(input('이 함수를 좀 고쳐봐'));
+      expect(hits.find((h) => h.ruleId === 'R014')).toBeTruthy();
+    });
+    it('fires on English vague qualifiers', () => {
+      const hits = runRules(input('refactor this function, kinda optimize it'));
+      expect(hits.find((h) => h.ruleId === 'R014')).toBeTruthy();
+    });
+    it('does not fire on specific prompts', () => {
+      const hits = runRules(
+        input('이 함수를 null-safe 하게 리팩터해줘. 결과는 diff 형식으로 30줄 이내로.')
+      );
+      expect(hits.find((h) => h.ruleId === 'R014')).toBeFalsy();
+    });
   });
 
   describe('overall on a good prompt', () => {
@@ -79,6 +134,19 @@ describe('rules', () => {
       const hits = runRules(input(good));
       const severe = hits.filter((h) => h.severity >= 3);
       expect(severe).toHaveLength(0);
+    });
+  });
+
+  describe('R003 multilingual context keywords', () => {
+    it('does not fire on Japanese プロジェクト context', () => {
+      const hits = runRules(
+        input('このTypeScriptプロジェクトのファイルをリファクタしてください。')
+      );
+      expect(hits.find((h) => h.ruleId === 'R003')).toBeFalsy();
+    });
+    it('does not fire on Simplified Chinese 项目 context', () => {
+      const hits = runRules(input('请帮我分析这个 Node.js 项目的代码结构。'));
+      expect(hits.find((h) => h.ruleId === 'R003')).toBeFalsy();
     });
   });
 });

@@ -31,8 +31,14 @@ export const CONTEXT_KEYWORDS: RegExp[] = [
   /사용자[는은가]/u,
   /도메인[은는]/u,
   /맥락/u,
+  // Japanese: プロジェクト / コード / ファイル / 関数 / クラス / モジュール / ユーザー
+  /(プロジェクト|コード|コードベース|ファイル|関数|クラス|モジュール|ユーザー)/u,
+  // Simplified Chinese: 项目 / 代码 / 代码库 / 文件 / 函数 / 类 / 模块 / 用户
+  /(项目|代码|代码库|文件|函数|类|模块|用户)/u,
+  // Traditional Chinese: 專案 / 代碼 / 代碼庫 / 檔案 / 函數 / 類 / 模組 / 使用者
+  /(專案|代碼庫|檔案|函數|模組|使用者)/u,
   // Common tech domain mentions that give enough context signal
-  /\b(typescript|javascript|python|react|node|rust|go|postgres|sqlite|redis|kafka|docker|k8s|kubernetes)\b/i,
+  /\b(typescript|javascript|python|react|node|rust|go|postgres|sqlite|redis|kafka|docker|k8s|kubernetes|fastapi|nestjs|nextjs|nuxt|svelte|vue|angular|django|flask|spring|rails|laravel)\b/i,
 ];
 
 export const IMPERATIVE_KEYWORDS: RegExp[] = [
@@ -84,6 +90,28 @@ export const QUESTION_MARKERS: RegExp[] = [
 export const AMBIGUOUS_PRONOUN_STARTS: RegExp[] = [
   /^\s*(이거|그거|저거|저것|이것|that|this|it)\b/i,
   /^\s*(위\s*내용|above|the\s+above)\b/i,
+];
+
+/**
+ * Vague adverbs / qualifiers that weaken the prompt's specificity.
+ * C-023 in docs/08-quality-criteria.md.
+ */
+export const AMBIGUOUS_ADVERBS: RegExp[] = [
+  // Korean — the most common vague Korean qualifiers.
+  // Word boundaries aren't reliable for Hangul, so we anchor on whitespace / punctuation.
+  /(^|[\s,.!?])(좀|대충|적당히|그냥|알아서|어떻게든|막|아무거나|뭔가)(\s|$|[\s,.!?])/u,
+  // English — explicit word boundaries.
+  /\b(kinda|sorta|somewhat|maybe|probably|whatever|anyhow|sort of|kind of)\b/i,
+];
+
+/**
+ * Non-conjunction task separators used to stack multiple asks in one prompt.
+ * C-004 expansion — the existing and/그리고 detection misses this kind of
+ * "요약해줘 // 번역도 같이 // 마크다운으로" pattern.
+ */
+export const TASK_SEPARATOR_PATTERNS: RegExp[] = [
+  /\s\/\/\s/g, // surrounded by whitespace to avoid comments in code
+  /\s\/\s(?!\/)/g, // standalone slash, not part of //
 ];
 
 export function anyMatch(text: string, patterns: RegExp[]): RegExp | null {

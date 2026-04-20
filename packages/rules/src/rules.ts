@@ -1,4 +1,5 @@
 import {
+  AMBIGUOUS_ADVERBS,
   AMBIGUOUS_PRONOUN_STARTS,
   CONTEXT_KEYWORDS,
   EXAMPLE_KEYWORDS,
@@ -8,6 +9,7 @@ import {
   OUTPUT_CONSTRAINT_KEYWORDS,
   QUESTION_MARKERS,
   SUCCESS_CRITERIA_KEYWORDS,
+  TASK_SEPARATOR_PATTERNS,
   anyMatch,
 } from './keywords.js';
 import type { Rule } from './types.js';
@@ -66,26 +68,55 @@ export const r003: Rule = {
 };
 
 // R004 — multiple tasks
+// Covers two patterns:
+//   (a) conjunction-heavy: and/그리고/또한/plus appears 3+ times
+//   (b) explicit separators: `요약해줘 // 번역해줘 // 코드로` — 2+ `//` or `/` separators
+//       paired with 2+ imperative verb hits means the user is stacking tasks.
 export const r004: Rule = {
   id: 'R004',
   name: 'multiple_tasks',
   category: 'structure',
-  description: 'Multiple tasks joined with "and/그리고".',
+  description: 'Multiple tasks joined with conjunctions or // separators.',
   severity: 3,
   detect: ({ promptText }) => {
     const lower = promptText.toLowerCase();
-    // Count "and"/"그리고"/"또한" joining verbs. Heuristic: 3+ occurrences = mixed.
-    let count = 0;
-    const res = [/\band\b/gi, /그리고/gu, /또한/gu, /,\s*또/gu, /\bplus\b/gi];
-    for (const re of res) {
+    const conjunctionPatterns = [/\band\b/gi, /그리고/gu, /또한/gu, /,\s*또/gu, /\bplus\b/gi];
+    let conjunctionCount = 0;
+    for (const re of conjunctionPatterns) {
       const m = lower.match(re);
-      if (m) count += m.length;
+      if (m) conjunctionCount += m.length;
     }
-    if (count < 3) return null;
+
+    // Count explicit separators in the original (case-insensitive doesn't help here).
+    let separatorCount = 0;
+    for (const re of TASK_SEPARATOR_PATTERNS) {
+      const clone = new RegExp(re.source, re.flags); // fresh lastIndex
+      const m = promptText.match(clone);
+      if (m) separatorCount += m.length;
+    }
+
+    // Count distinct imperative verb hits. A single prompt with one verb is fine;
+    // stacked tasks repeat the verb pattern.
+    let imperativeCount = 0;
+    for (const re of IMPERATIVE_KEYWORDS) {
+      const clone = new RegExp(re.source, `${re.flags.replace('g', '')}g`);
+      const m = promptText.match(clone);
+      if (m) imperativeCount += m.length;
+    }
+
+    const triggeredByConjunction = conjunctionCount >= 3;
+    const triggeredBySeparator = separatorCount >= 2 && imperativeCount >= 2;
+
+    if (!triggeredByConjunction && !triggeredBySeparator) return null;
+
+    const parts: string[] = [];
+    if (conjunctionCount > 0) parts.push(`접속사 ${conjunctionCount}회`);
+    if (separatorCount > 0) parts.push(`구분자(/ or //) ${separatorCount}회`);
+    if (imperativeCount > 0) parts.push(`명령형 ${imperativeCount}회`);
     return {
       severity: 3,
       message: '여러 태스크가 섞여 있습니다. 하나씩 나누면 결과 품질이 올라갑니다.',
-      evidence: `and/그리고 등 접속 ${count}회`,
+      evidence: parts.join(', '),
       fixHint: 'split_tasks',
     };
   },
@@ -223,22 +254,78 @@ export const r011: Rule = {
 };
 
 // R012 — code dump without instruction
+// Threshold lowered 0.8 → 0.65 after dogfooding surfaced the "300 lines of
+// code + one short question" pattern that slipped through at 0.8.
 export const r012: Rule = {
   id: 'R012',
   name: 'code_dump_no_instruction',
   category: 'structure',
-  description: 'Prompt is mostly code with no instruction.',
+  description: 'Prompt is mostly code (≥65%) with no clear instruction.',
   severity: 3,
   detect: ({ promptText }) => {
     const codeBlocks = promptText.match(/```[\s\S]*?```/g) ?? [];
     if (codeBlocks.length === 0) return null;
     const codeLen = codeBlocks.reduce((acc, b) => acc + b.length, 0);
-    if (codeLen / promptText.length < 0.8) return null;
+    const ratio = codeLen / promptText.length;
+    if (ratio < 0.65) return null;
     if (anyMatch(promptText, IMPERATIVE_KEYWORDS)) return null;
     return {
       severity: 3,
       message: '코드만 붙여넣으셨습니다. 원하는 동작(디버그/리뷰/설명)을 지시어로 추가하세요.',
+      evidence: `코드 비율 ${(ratio * 100).toFixed(0)}%`,
       fixHint: 'add_code_action',
+    };
+  },
+};
+
+// R013 — PII detected in prompt (C-036)
+// Warns the user that sensitive data leaked into a prompt. The masking in
+// packages/core/src/pii.ts will still run regardless; this rule surfaces the
+// hit to the scoreboard so it doesn't go unnoticed.
+export const r013: Rule = {
+  id: 'R013',
+  name: 'pii_detected',
+  category: 'safety',
+  description: 'PII (email / phone / RRN / API key / JWT / IP) detected in the prompt.',
+  severity: 2,
+  detect: ({ meta }) => {
+    const hits = meta.piiHits;
+    if (!hits) return null;
+    const kinds = Object.keys(hits).filter((k) => (hits[k] ?? 0) > 0);
+    if (kinds.length === 0) return null;
+    const total = kinds.reduce((s, k) => s + (hits[k] ?? 0), 0);
+    // Severity escalates with the number of distinct PII categories.
+    const severity: 1 | 2 | 3 = kinds.length >= 3 ? 3 : kinds.length >= 2 ? 2 : 1;
+    return {
+      severity,
+      message: `프롬프트에 민감정보(${kinds.join(', ')})가 포함돼 있습니다. 원문은 로컬에만 저장되지만, LLM 리라이트 등 외부 호출에도 포함되지 않도록 주의하세요.`,
+      evidence: `총 ${total}건, 카테고리 ${kinds.length}종`,
+      fixHint: 'redact_pii',
+    };
+  },
+};
+
+// R014 — vague adverbs (C-023)
+// "좀/대충/kinda/maybe" 같은 모호 표현은 결과 품질을 떨어뜨립니다.
+export const r014: Rule = {
+  id: 'R014',
+  name: 'vague_adverb',
+  category: 'style',
+  description: 'Prompt contains vague qualifiers like 좀/대충/kinda/probably.',
+  severity: 2,
+  detect: ({ promptText, meta }) => {
+    if (meta.wordCount < 4) return null;
+    const m = anyMatch(promptText, AMBIGUOUS_ADVERBS);
+    if (!m) return null;
+    // Try to extract the actual match for evidence.
+    const re = new RegExp(m.source, m.flags);
+    const match = promptText.match(re);
+    return {
+      severity: 2,
+      message:
+        '모호한 부사(좀/대충/kinda 등)가 있습니다. 구체적 기준(숫자·예시·범위)으로 바꾸면 결과가 일관됩니다.',
+      evidence: match ? match[0].trim() : m.source,
+      fixHint: 'replace_vague',
     };
   },
 };
@@ -256,4 +343,6 @@ export const ALL_RULES: Rule[] = [
   r010,
   r011,
   r012,
+  r013,
+  r014,
 ];

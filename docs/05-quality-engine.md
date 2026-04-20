@@ -41,24 +41,26 @@ export interface DetectOutput {
 
 ---
 
-## 2. 룰셋 v0 (MVP)
+## 2. 룰셋 v0.1.1
 
-**12개로 시작.** 각 룰은 독립적으로 on/off 가능.
+**14개.** 각 룰은 독립적으로 on/off 가능.
 
 | ID | 이름 | 카테고리 | 기본 severity | 트리거 | 메시지 |
 |---|---|---|---|---|---|
 | R001 | too_short | structure | 2 | `word_count < 4` | "프롬프트가 너무 짧습니다. 목적·대상·기대 결과를 한 줄 더 추가해 보세요." |
 | R002 | no_output_format | output | 3 | 출력 형식 힌트 키워드 없음("json/표/bullet/요약/…") | "출력 형식이 지정되지 않았습니다. JSON/bullet/길이 등을 명시하면 결과가 일관됩니다." |
-| R003 | no_context | context | 3 | 맥락 키워드 없음("이 프로젝트는/사용자는/도메인은…") + `word_count < 30` | "대상 도메인·프로젝트 맥락이 빠졌습니다." |
-| R004 | multiple_tasks | structure | 3 | 접속사 "and/그리고/또한"으로 연결된 동사 ≥ 3 | "여러 태스크가 섞여 있습니다. 하나씩 나누면 결과 품질이 올라갑니다." |
-| R005 | injection_attempt | safety | 5 | `/ignore (all )?previous/i`, `system:` 블록 위조 시도, `<\|im_start\|>` 등 | "프롬프트 인젝션 패턴이 감지됐습니다." |
-| R006 | no_success_criteria | output | 2 | 완료 조건/검수 기준 표현 없음 | "무엇이 '좋은 결과'인지 기준이 없습니다. '성공 기준' 한 줄을 추가하세요." |
-| R007 | ambiguous_pronoun | structure | 2 | "이거/그거/위 내용" 등 대명사로 시작 + 앞 턴 짧음 | "대명사 지칭이 모호합니다. 무엇을 가리키는지 명시하세요." |
+| R003 | no_context | context | 3 | 맥락 키워드 없음(한/영/일/중 다국어) + `word_count < 30` | "대상 도메인·프로젝트 맥락이 빠졌습니다." |
+| R004 | multiple_tasks | structure | 3 | 접속사 "and/그리고/또한" ≥ 3회 **또는** `//`·`/` 구분자 ≥ 2회 + 명령형 동사 ≥ 2회 | "여러 태스크가 섞여 있습니다. 하나씩 나누면 결과 품질이 올라갑니다." |
+| R005 | injection_attempt | safety | 5 | `/ignore (all )?previous/i`, `system:` 블록 위조, `<\|im_start\|>` 등 | "프롬프트 인젝션 패턴이 감지됐습니다." |
+| R006 | no_success_criteria | output | 2 | 완료 조건/검수 기준 표현 없음 | "무엇이 '좋은 결과'인지 기준이 없습니다." |
+| R007 | ambiguous_pronoun | structure | 2 | "이거/그거/위 내용" 등 대명사로 시작 + 앞 턴 짧음 | "대명사 지칭이 모호합니다." |
 | R008 | no_examples_when_complex | style | 1 | `word_count > 80` 이면서 "예:/example:" 없음 | "복잡한 요청이면 예시를 1개 포함하는 편이 좋습니다." |
 | R009 | imperative_missing | structure | 2 | 명령형 동사·요청 표현 없음 | "무엇을 해달라는지 명확한 동사가 없습니다." |
 | R010 | no_constraint | output | 2 | 길이/시간/언어/포맷 제약 없음 | "출력 제약(길이/언어/범위)이 없습니다." |
-| R011 | question_without_context | context | 2 | 단순 질문형 + `word_count < 15` | "배경 없이 단문 질문입니다. 이전에 무엇을 했는지 1줄 덧붙이면 좋습니다." |
-| R012 | code_dump_no_instruction | structure | 3 | 코드블록이 본문의 80% 이상이면서 지시어 없음 | "코드만 붙여넣으셨습니다. 원하는 동작(디버그/리뷰/설명)을 지시어로 추가하세요." |
+| R011 | question_without_context | context | 2 | 단순 질문형 + `word_count < 15` | "배경 없이 단문 질문입니다." |
+| R012 | code_dump_no_instruction | structure | 3 | 코드블록이 본문의 **65% 이상** + 지시어 없음 | "코드만 붙여넣으셨습니다." |
+| R013 | pii_detected | safety | 1–3 | `meta.piiHits` 비어 있지 않음 (카테고리 수에 따라 severity 1/2/3) | "프롬프트에 민감정보(…)가 포함돼 있습니다." |
+| R014 | vague_adverb | style | 2 | `좀/대충/그냥/kinda/probably` 등 모호 부사 | "모호한 부사가 있습니다. 구체적 기준으로 바꾸세요." |
 
 ### 2.1 검출 로직 상세
 

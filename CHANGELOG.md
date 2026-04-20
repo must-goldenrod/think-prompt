@@ -8,6 +8,30 @@ stability guarantees of v1.0 do not yet apply.
 
 ## [Unreleased]
 
+### Added
+- **R013 `pii_detected`** — new safety rule that escalates severity 1 → 3
+  based on how many distinct PII categories the masker caught in the
+  prompt (email / phone / RRN / API keys / JWT / IP). Addresses C-036.
+- **R014 `vague_adverb`** — new style rule flagging 좀/대충/그냥/kinda/
+  probably/maybe etc. Addresses C-023.
+
+### Changed
+- **R004 `multiple_tasks`** now also fires on `//` or `/` separators when
+  combined with ≥ 2 imperative verbs, catching the "요약 // 번역 // 표로"
+  pattern that slipped through the conjunction-only detection.
+  Addresses C-004.
+- **R012 `code_dump_no_instruction`** threshold lowered 80% → 65% after
+  dogfooding surfaced the "7 lines of code + short question" pattern
+  that used to evade detection. Addresses C-007.
+- **R003 `no_context`** keyword dictionary extended to cover Japanese
+  (プロジェクト / ファイル / 関数 / …), Simplified Chinese (项目 /
+  代码 / 文件 / …), Traditional Chinese (專案 / 檔案 / 函數 / …), and
+  more JS/Python web-framework names. Addresses C-009 and partially
+  C-049 / C-050.
+
+### Testing
+- Rule suite: 11 → 22 tests. Total: 53 → 64 tests, all passing.
+
 ### To verify
 - **M0 observation spike** — confirm Claude Code hook payloads and
   `transcript.jsonl` field names against the assumptions encoded in

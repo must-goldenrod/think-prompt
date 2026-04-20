@@ -5,7 +5,12 @@ export type RuleCategory = 'structure' | 'context' | 'output' | 'safety' | 'styl
 export interface DetectInput {
   promptText: string;
   session: { cwd: string; model?: string };
-  meta: { charLen: number; wordCount: number };
+  meta: {
+    charLen: number;
+    wordCount: number;
+    /** PII mask kinds → counts (populated by agent after maskPii). Absent in unit tests. */
+    piiHits?: Record<string, number> | undefined;
+  };
 }
 
 export interface DetectOutput {
