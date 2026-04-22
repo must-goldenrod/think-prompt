@@ -147,7 +147,9 @@ describe('dashboard', () => {
 });
 
 describe('renderDailyChart', () => {
-  const zeroDay = (day: string): {
+  const zeroDay = (
+    day: string
+  ): {
     day: string;
     good: number;
     ok: number;
