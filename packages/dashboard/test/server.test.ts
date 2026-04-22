@@ -169,12 +169,8 @@ describe('dashboard period selector (?days=)', () => {
     const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.statusCode).toBe(200);
     // The 30d pill should be the one marked active (blue bg), 7d should be inactive.
-    expect(res.body).toMatch(
-      /<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/
-    );
-    expect(res.body).not.toMatch(
-      /<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/
-    );
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/);
+    expect(res.body).not.toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/);
     await app.close();
   });
 
@@ -182,9 +178,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=7' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(
-      /<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/
-    );
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/);
     await app.close();
   });
 
@@ -192,9 +186,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=90' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(
-      /<a href="\/\?lang=en&days=90"[^>]*bg-blue-600[^>]*>90d<\/a>/
-    );
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=90"[^>]*bg-blue-600[^>]*>90d<\/a>/);
     await app.close();
   });
 
@@ -202,9 +194,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=365' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(
-      /<a href="\/\?lang=en&days=365"[^>]*bg-blue-600[^>]*>365d<\/a>/
-    );
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=365"[^>]*bg-blue-600[^>]*>365d<\/a>/);
     await app.close();
   });
 
@@ -217,9 +207,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=all' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(
-      /<a href="\/\?lang=en&days=all"[^>]*bg-blue-600[^>]*>all<\/a>/
-    );
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=all"[^>]*bg-blue-600[^>]*>all<\/a>/);
     await app.close();
   });
 
@@ -230,9 +218,7 @@ describe('dashboard period selector (?days=)', () => {
       url: '/?lang=en&days=not-a-number',
     });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(
-      /<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/
-    );
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/);
     await app.close();
   });
 
