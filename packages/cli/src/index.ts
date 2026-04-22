@@ -89,13 +89,14 @@ program.command('open').description('open local dashboard in browser').action(op
 
 program
   .command('backfill')
-  .description('scan ~/.claude/projects for historical prompts (dry-run only for now)')
+  .description('scan or import historical prompts from ~/.claude/projects')
   .option('--dry-run', 'preview counts without importing (default)', true)
-  .option('--execute', 'NOT YET IMPLEMENTED — will import in a follow-up release')
-  .option('--limit <n>', 'scan at most N .jsonl files')
+  .option('--execute', 'actually import — transactional, idempotent via prompt_hash dedup')
+  .option('--limit <n>', 'process at most N .jsonl files')
   .option('--since <date>', 'only consider prompts after this date (YYYY-MM-DD)')
   .option('--project <substr>', 'filter to project dirs containing this substring')
   .option('--root <path>', 'override the Claude projects directory')
+  .option('--batch-size <n>', 'transaction batch size when importing (default 500)')
   .action(backfillCmd);
 
 const autostart = program

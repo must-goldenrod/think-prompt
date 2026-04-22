@@ -124,11 +124,17 @@ export interface InsertPromptUsageInput {
   turn_index?: number;
   coach_context?: string | null;
   browser_session_id?: string | null;
+  /**
+   * ISO timestamp to persist as `created_at`. Defaults to "now".
+   * Used by the Claude history backfill to preserve original capture times
+   * instead of stamping every imported prompt with today's date.
+   */
+  created_at?: string;
 }
 
 export function insertPromptUsage(db: Db, input: InsertPromptUsageInput): PromptUsageRow {
   const id = ulid();
-  const createdAt = new Date().toISOString();
+  const createdAt = input.created_at ?? new Date().toISOString();
   const hash = sha256Hex(input.prompt_text);
   const { masked, hits } = maskPii(input.prompt_text);
   const wordCount = input.prompt_text.trim().split(/\s+/).filter(Boolean).length;
