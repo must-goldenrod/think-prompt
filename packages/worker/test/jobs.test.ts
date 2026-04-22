@@ -54,7 +54,7 @@ describe('worker jobs', () => {
       .prepare(
         `SELECT prompt_text, response_text, status FROM subagent_invocations WHERE session_id=? AND agent_id=?`
       )
-      .get('s1', 'a1') as any;
+      .get('s1', 'a1') as { prompt_text: string; response_text: string; status: string };
     expect(sub.prompt_text).toBe('explore the codebase');
     expect(sub.response_text).toBe('Found 3 files.');
     expect(sub.status).toBe('completed');
@@ -101,7 +101,9 @@ describe('worker jobs', () => {
       { db, logger, config },
       { session_id: 's3', transcript_path: transcriptPath }
     );
-    const q = db.prepare(`SELECT * FROM quality_scores WHERE usage_id=?`).get(u.id) as any;
+    const q = db.prepare(`SELECT * FROM quality_scores WHERE usage_id=?`).get(u.id) as {
+      rule_score: number;
+    };
     expect(q.rule_score).toBe(90);
     db.close();
   });

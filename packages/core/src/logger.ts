@@ -26,7 +26,11 @@ class MultiStream extends Writable {
   constructor(private dests: NodeJS.WritableStream[]) {
     super();
   }
-  override _write(chunk: any, _enc: string, cb: (err?: Error | null) => void): void {
+  override _write(
+    chunk: Buffer | string | Uint8Array,
+    _enc: string,
+    cb: (err?: Error | null) => void
+  ): void {
     for (const d of this.dests) {
       try {
         d.write(chunk);

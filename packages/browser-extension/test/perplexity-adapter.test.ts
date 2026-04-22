@@ -1,23 +1,14 @@
 /**
  * jsdom smoke test for the Perplexity adapter.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { findPromptMessage, setupChromeStub } from './helpers/chrome-stub.js';
+
+let sendMessage: ReturnType<typeof setupChromeStub>;
 
 beforeEach(() => {
   document.body.replaceChildren();
-  (globalThis as any).chrome = {
-    runtime: {
-      sendMessage: vi.fn((_msg: unknown, cb?: (r: unknown) => void) => cb?.({ ok: true })),
-    },
-  };
-  Object.defineProperty(window, 'performance', {
-    value: { timeOrigin: 3333 },
-    configurable: true,
-  });
-  Object.defineProperty(window, 'location', {
-    value: { pathname: '/search/pplx-42' },
-    writable: true,
-  });
+  sendMessage = setupChromeStub('/search/pplx-42');
 });
 
 describe('perplexity adapter', () => {
@@ -36,12 +27,10 @@ describe('perplexity adapter', () => {
 
     btn.click();
 
-    const sendMessage = (globalThis as any).chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
-    const promptCall = sendMessage.mock.calls.find((c) => (c[0] as any)?.kind === 'prompt');
-    expect(promptCall).toBeDefined();
-    const msg = promptCall![0] as any;
-    expect(msg.payload.source).toBe('perplexity');
-    expect(msg.payload.prompt_text).toBe('what is RAG');
-    expect(msg.payload.browser_session_id).toBe('pplx-42');
+    const msg = findPromptMessage(sendMessage);
+    expect(msg).toBeDefined();
+    expect(msg!.payload.source).toBe('perplexity');
+    expect(msg!.payload.prompt_text).toBe('what is RAG');
+    expect(msg!.payload.browser_session_id).toBe('pplx-42');
   });
 });

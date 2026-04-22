@@ -1,6 +1,18 @@
 import { openDb } from '@think-prompt/core';
 import pc from 'picocolors';
 
+interface ListRow {
+  id: string;
+  session_id: string;
+  snippet: string;
+  created_at: string;
+  final_score: number;
+  tier: string;
+  hits: number;
+}
+
+type SqliteParam = string | number | null;
+
 export async function listCmd(opts: {
   limit?: string;
   tier?: string;
@@ -9,7 +21,7 @@ export async function listCmd(opts: {
   const limit = Number.parseInt(opts.limit ?? '20', 10);
   const db = openDb();
   const wheres: string[] = [];
-  const args: any[] = [];
+  const args: SqliteParam[] = [];
   if (opts.tier) {
     wheres.push('qs.tier = ?');
     args.push(opts.tier);
@@ -30,7 +42,7 @@ export async function listCmd(opts: {
          ORDER BY pu.created_at DESC
          LIMIT ?`
     )
-    .all(...args, limit) as any[];
+    .all(...args, limit) as ListRow[];
   if (rows.length === 0) {
     console.log(pc.dim('no prompts yet'));
     return;
@@ -43,7 +55,7 @@ export async function listCmd(opts: {
       bad: pc.red,
       'n/a': pc.dim,
     };
-    const color = tierColor[r.tier as string] ?? pc.white;
+    const color = tierColor[r.tier] ?? pc.white;
     const score = r.final_score >= 0 ? String(r.final_score).padStart(3) : ' - ';
     console.log(
       `${pc.dim(r.id.slice(-8))}  ${color(score)} ${color(r.tier.padEnd(4))}  ` +

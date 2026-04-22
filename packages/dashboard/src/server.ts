@@ -9,7 +9,7 @@ import {
 } from '@think-prompt/core';
 import { getRulesCatalog } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { escapeHtml, layout, tierBadge } from './html.js';
+import { escapeHtml, layout, renderDailyChart, tierBadge } from './html.js';
 
 export interface DashboardDeps {
   config?: Config;
@@ -43,9 +43,74 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
   fastify.get('/', async (_req, reply) => {
     const totals = db.prepare(`SELECT COUNT(*) AS c FROM prompt_usages`).get() as { c: number };
-    const tiers = db
-      .prepare(`SELECT tier, COUNT(*) AS c FROM quality_scores GROUP BY tier`)
+
+    // All-time tier breakdown — force all statuses into the result even when 0.
+    const tierRows = db
+      .prepare(
+        `SELECT COALESCE(qs.tier, 'n/a') AS tier, COUNT(*) AS c
+           FROM prompt_usages pu
+           LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
+          GROUP BY COALESCE(qs.tier, 'n/a')`
+      )
       .all() as Array<{ tier: string; c: number }>;
+    const tierCountMap: Record<string, number> = Object.fromEntries(
+      tierRows.map((r) => [r.tier, r.c])
+    );
+    const ALL_TIERS = ['good', 'ok', 'weak', 'bad', 'n/a'] as const;
+    const tierCounts = ALL_TIERS.map((t) => ({ tier: t, c: tierCountMap[t] ?? 0 }));
+    const tierTotal = tierCounts.reduce((acc, r) => acc + r.c, 0);
+
+    // Daily tier breakdown for the last 14 days. We compute the day axis from
+    // "today" so empty days still show up as an empty bar (easier to read
+    // than a ragged chart that skips silent days).
+    const DAYS = 14;
+    const dailyRows = db
+      .prepare(
+        `SELECT DATE(pu.created_at) AS day,
+                COALESCE(qs.tier, 'n/a') AS tier,
+                COUNT(*) AS c
+           FROM prompt_usages pu
+           LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
+          WHERE pu.created_at >= DATE('now', ?)
+          GROUP BY day, tier
+          ORDER BY day ASC`
+      )
+      .all(`-${DAYS - 1} days`) as Array<{ day: string; tier: string; c: number }>;
+    const dailyIndex: Record<string, Record<string, number>> = {};
+    for (const r of dailyRows) {
+      if (!dailyIndex[r.day]) dailyIndex[r.day] = {};
+      const bucket = dailyIndex[r.day];
+      if (bucket) bucket[r.tier] = r.c;
+    }
+    const days: Array<{
+      day: string;
+      good: number;
+      ok: number;
+      weak: number;
+      bad: number;
+      na: number;
+      total: number;
+    }> = [];
+    const today = new Date();
+    for (let i = DAYS - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const b = dailyIndex[key] ?? {};
+      const row = {
+        day: key,
+        good: b.good ?? 0,
+        ok: b.ok ?? 0,
+        weak: b.weak ?? 0,
+        bad: b.bad ?? 0,
+        na: b['n/a'] ?? 0,
+        total: 0,
+      };
+      row.total = row.good + row.ok + row.weak + row.bad + row.na;
+      days.push(row);
+    }
+    const windowTotal = days.reduce((a, d) => a + d.total, 0);
+
     const recent = db
       .prepare(
         `SELECT pu.id, substr(pu.prompt_text,1,120) AS snippet, pu.created_at,
@@ -63,30 +128,60 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       )
       .all() as any[];
 
-    const tierHtml = tiers
+    const tierHtml = tierCounts
       .map(
         (t) =>
-          `<div class="flex items-center gap-2"><span class="font-mono">${t.c}</span>${tierBadge(t.tier)}</div>`
+          `<div class="flex items-center gap-2"><span class="font-mono text-sm">${t.c}</span>${tierBadge(t.tier)}</div>`
+      )
+      .join('');
+
+    const chartHtml = renderDailyChart(days);
+    const dailyListHtml = days
+      .map(
+        (d) =>
+          `<div class="flex items-center justify-between text-xs py-1 border-b border-gray-100 dark:border-zinc-700 last:border-0">
+             <span class="text-gray-500 font-mono">${escapeHtml(d.day)}</span>
+             <span class="flex items-center gap-2">
+               ${d.good ? `<span class="text-xs font-mono" style="color:#16a34a">${d.good}</span>` : ''}
+               ${d.ok ? `<span class="text-xs font-mono" style="color:#ca8a04">${d.ok}</span>` : ''}
+               ${d.weak ? `<span class="text-xs font-mono" style="color:#ea580c">${d.weak}</span>` : ''}
+               ${d.bad ? `<span class="text-xs font-mono" style="color:#dc2626">${d.bad}</span>` : ''}
+               ${d.na ? `<span class="text-xs font-mono" style="color:#6b7280">${d.na}</span>` : ''}
+               <span class="font-mono w-8 text-right">${d.total}</span>
+             </span>
+           </div>`
       )
       .join('');
 
     const body = `
       <h1 class="text-2xl font-bold mb-6">Overview</h1>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
           <div class="text-xs text-gray-500">Total prompts</div>
           <div class="text-3xl font-mono mt-2">${totals.c}</div>
+          <div class="text-xs text-gray-400 mt-1">last ${DAYS} days: ${windowTotal}</div>
         </div>
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
-          <div class="text-xs text-gray-500 mb-3">Tier breakdown</div>
-          <div class="flex gap-3 flex-wrap">${tierHtml || '<span class="text-gray-400 text-sm">no data</span>'}</div>
-        </div>
-        <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
-          <div class="text-xs text-gray-500">Coach mode</div>
-          <div class="text-lg mt-2">${config.agent.coach_mode ? '<span class="text-green-600">ON</span>' : '<span class="text-gray-500">OFF</span>'}</div>
-          <div class="text-xs text-gray-400 mt-1">think-prompt coach ${config.agent.coach_mode ? 'off' : 'on'}</div>
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-xs text-gray-500">Tier breakdown</div>
+            <div class="text-xs text-gray-400">total <span class="font-mono">${tierTotal}</span></div>
+          </div>
+          <div class="flex gap-3 flex-wrap">${tierHtml}</div>
         </div>
       </div>
+
+      <section class="mb-8">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-bold">Daily additions (last ${DAYS} days)</h2>
+          <div class="text-xs text-gray-500">total <span class="font-mono">${windowTotal}</span></div>
+        </div>
+        <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+          ${chartHtml}
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-8">
+            ${dailyListHtml}
+          </div>
+        </div>
+      </section>
 
       <section class="mb-8">
         <h2 class="text-lg font-bold mb-3">Lowest scoring</h2>

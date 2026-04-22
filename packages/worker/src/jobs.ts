@@ -59,18 +59,33 @@ export async function handleParseSubagentTranscript(
     );
     return 'done';
   }
-  const events = tp.parseTranscriptString(text);
-  const prompt_text = tp.extractFirstUserPrompt(events);
-  const response_text = tp.extractFinalAssistantText(events);
-  finishSubagent(ctx.db, payload.session_id, payload.agent_id, {
-    prompt_text,
-    response_text,
-    transcript_path: payload.agent_transcript_path,
-  });
-  ctx.logger.info(
-    { session_id: payload.session_id, agent_id: payload.agent_id, events: events.length },
-    'subagent transcript parsed'
-  );
+  // Parse + DB writes wrapped: any deterministic failure (malformed JSONL,
+  // schema drift, FK constraint on closed session) is permanent, so retrying
+  // would just feed the DLQ. Log and drop.
+  try {
+    const events = tp.parseTranscriptString(text);
+    const prompt_text = tp.extractFirstUserPrompt(events);
+    const response_text = tp.extractFinalAssistantText(events);
+    finishSubagent(ctx.db, payload.session_id, payload.agent_id, {
+      prompt_text,
+      response_text,
+      transcript_path: payload.agent_transcript_path,
+    });
+    ctx.logger.info(
+      { session_id: payload.session_id, agent_id: payload.agent_id, events: events.length },
+      'subagent transcript parsed'
+    );
+  } catch (err) {
+    ctx.logger.warn(
+      {
+        err,
+        session_id: payload.session_id,
+        agent_id: payload.agent_id,
+        path: payload.agent_transcript_path,
+      },
+      'subagent transcript parse/persist failed — dropping job'
+    );
+  }
   return 'done';
 }
 
@@ -86,8 +101,18 @@ export async function handleParseTranscript(
     );
     return 'done';
   }
-  const events = tp.parseTranscriptString(text);
-  const toolSummary = tp.summarizeToolUse(events);
+  let events: ReturnType<typeof tp.parseTranscriptString>;
+  let toolSummary: ReturnType<typeof tp.summarizeToolUse>;
+  try {
+    events = tp.parseTranscriptString(text);
+    toolSummary = tp.summarizeToolUse(events);
+  } catch (err) {
+    ctx.logger.warn(
+      { err, session_id: payload.session_id, path: payload.transcript_path },
+      'session transcript parse failed — dropping job'
+    );
+    return 'done';
+  }
 
   // Compute usage scores per prompt_usage in this session
   const usages = ctx.db
