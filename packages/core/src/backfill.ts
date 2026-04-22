@@ -1,11 +1,11 @@
-import { createHash } from 'node:crypto';
 /**
  * Claude Code history backfill — scans `~/.claude/projects/**\/*.jsonl` and
  * reports how many user prompts are there, how many are already present in
  * the Think-Prompt DB, and how many would be new imports.
  *
- * This module is SCAN-ONLY (dry-run). Actual inserts will ship in a
- * follow-up that wires the scanner to insertPromptUsage.
+ * Also exposes `importClaudeHistory` to actually write those prompts into
+ * the local DB (used by `think-prompt backfill --execute`). Import runs
+ * the same rule engine as live capture, so tiers/scores come out consistent.
  *
  * Layout observed on macOS:
  *   ~/.claude/projects/
@@ -25,10 +25,13 @@ import { createHash } from 'node:crypto';
  *     ...
  *   }
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Database as Db } from 'better-sqlite3';
+import { insertPromptUsage, insertRuleHit, upsertQualityScore, upsertSession } from './db.js';
+import { composeFinalScore, computeRuleScore } from './scorer.js';
 
 export interface BackfillScanOptions {
   /** Override the Claude projects root. Default: `~/.claude/projects`. */
@@ -321,4 +324,192 @@ function normalizeIsoDate(raw: string): string {
 
 function sha256Hex(s: string): string {
   return createHash('sha256').update(s).digest('hex');
+}
+
+// ----------------------- import (--execute) ------------------------------
+
+/** Signature of `runRules` from @think-prompt/rules. Kept loose here to avoid
+ *  a hard dependency edge from core → rules (core is the lower layer). */
+export type RunRulesFn = (ctx: {
+  promptText: string;
+  session: { cwd: string };
+  meta: { charLen: number; wordCount: number; piiHits?: Record<string, number> };
+}) => Array<{
+  ruleId: string;
+  ruleName: string;
+  severity: number;
+  message: string;
+  evidence?: string | null;
+}>;
+
+export interface ImportProgress {
+  totalCandidates: number;
+  processed: number;
+  imported: number;
+  skippedDup: number;
+  failed: number;
+  currentSession: string;
+}
+
+export interface ImportOptions extends BackfillScanOptions {
+  /** Inject the rules runner so core stays decoupled from the rules package. */
+  runRules: RunRulesFn;
+  /** Transaction batch size. Default 500. */
+  batchSize?: number;
+  /** Optional progress callback (every completed batch). */
+  onProgress?: (p: ImportProgress) => void;
+}
+
+export interface ImportResult {
+  filesScanned: number;
+  filesFailed: number;
+  totalCandidates: number;
+  imported: number;
+  skippedDup: number;
+  failed: number;
+  distinctSessions: number;
+  durationMs: number;
+}
+
+/**
+ * Write every new historical prompt into the local DB, running the same
+ * rule scorer as live capture so tiers/scores are consistent with
+ * hook-collected data.
+ *
+ * Idempotent: re-running is safe — `prompt_hash` dedup catches anything
+ * that was imported on a previous run. Crashes mid-run lose at most
+ * `batchSize-1` rows (transaction rollback).
+ */
+export function importClaudeHistory(db: Db, opts: ImportOptions): ImportResult {
+  const t0 = Date.now();
+  const root = opts.root ?? join(homedir(), '.claude', 'projects');
+  const batchSize = opts.batchSize ?? 500;
+
+  const result: ImportResult = {
+    filesScanned: 0,
+    filesFailed: 0,
+    totalCandidates: 0,
+    imported: 0,
+    skippedDup: 0,
+    failed: 0,
+    distinctSessions: 0,
+    durationMs: 0,
+  };
+
+  if (!existsSync(root)) {
+    result.durationMs = Date.now() - t0;
+    return result;
+  }
+
+  const files = collectJsonlFiles(root, opts.projectFilter);
+  const cap = opts.limit && opts.limit > 0 ? Math.min(files.length, opts.limit) : files.length;
+
+  // Pre-load hash set once. Subsequent dedup within this run is memory-only.
+  const hashSet = loadExistingHashes(db);
+  const sessionSet = new Set<string>();
+  const sessionCwdMap = new Map<string, string>();
+
+  // Gather all candidates first so we can chunk + transaction nicely.
+  // Memory impact: each candidate is ~1 KB average × 100k = ~100 MB.
+  // If that becomes a concern we can stream file-by-file.
+  const candidates: BackfillCandidate[] = [];
+  for (let i = 0; i < cap; i++) {
+    const path = files[i];
+    if (!path) continue;
+    result.filesScanned++;
+    const { failed, prompts } = scanFile(path, opts.since);
+    if (failed) {
+      result.filesFailed++;
+      continue;
+    }
+    for (const c of prompts) {
+      if (hashSet.has(c.promptHash)) {
+        result.skippedDup++;
+        continue;
+      }
+      hashSet.add(c.promptHash); // dedup within this run too
+      sessionCwdMap.set(c.sessionId, c.cwd);
+      candidates.push(c);
+    }
+  }
+  result.totalCandidates = candidates.length;
+
+  // Chronological order per session so turn_index increments correctly.
+  candidates.sort((a, b) => {
+    if (a.sessionId !== b.sessionId) return a.sessionId < b.sessionId ? -1 : 1;
+    return a.timestamp < b.timestamp ? -1 : 1;
+  });
+
+  // Upfront: upsert sessions (one row per distinct sessionId) in a single tx.
+  const upsertSessions = db.transaction(() => {
+    for (const [sid, cwd] of sessionCwdMap) {
+      upsertSession(db, { id: sid, cwd, source: 'claude-code-backfill' });
+      sessionSet.add(sid);
+    }
+  });
+  upsertSessions();
+  result.distinctSessions = sessionSet.size;
+
+  // Process candidates in batches, each batch its own transaction.
+  const insertBatch = db.transaction((items: BackfillCandidate[]) => {
+    for (const c of items) {
+      try {
+        const usage = insertPromptUsage(db, {
+          session_id: c.sessionId,
+          prompt_text: c.promptText,
+          created_at: c.timestamp,
+        });
+        const hits = opts.runRules({
+          promptText: c.promptText,
+          session: { cwd: c.cwd },
+          meta: { charLen: usage.char_len, wordCount: usage.word_count },
+        });
+        for (const h of hits) {
+          insertRuleHit(db, {
+            usage_id: usage.id,
+            rule_id: h.ruleId,
+            severity: h.severity,
+            message: h.message,
+            evidence: h.evidence ?? undefined,
+          });
+        }
+        const ruleScore = computeRuleScore(hits);
+        const { final_score, tier } = composeFinalScore({
+          rule_score: ruleScore,
+          usage_score: null,
+          judge_score: null,
+        });
+        upsertQualityScore(db, {
+          usage_id: usage.id,
+          rule_score: ruleScore,
+          final_score,
+          tier,
+          rules_version: 1,
+        });
+        result.imported++;
+      } catch {
+        // Individual prompt failures (FK constraint, schema drift, malformed
+        // text) drop in 1 attempt instead of rolling back the whole batch.
+        result.failed++;
+      }
+    }
+  });
+
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const chunk = candidates.slice(i, i + batchSize);
+    insertBatch(chunk);
+    if (opts.onProgress) {
+      opts.onProgress({
+        totalCandidates: candidates.length,
+        processed: Math.min(i + batchSize, candidates.length),
+        imported: result.imported,
+        skippedDup: result.skippedDup,
+        failed: result.failed,
+        currentSession: chunk[chunk.length - 1]?.sessionId ?? '',
+      });
+    }
+  }
+
+  result.durationMs = Date.now() - t0;
+  return result;
 }
