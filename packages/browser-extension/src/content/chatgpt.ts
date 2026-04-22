@@ -14,8 +14,10 @@ const chatgpt: PromptHook = {
 
   readPrompt(root) {
     if (root instanceof HTMLTextAreaElement) return root.value;
-    // contenteditable — innerText preserves line breaks roughly
-    return (root as HTMLElement).innerText;
+    // contenteditable — innerText preserves line breaks roughly. Fall back
+    // to textContent so jsdom unit tests still see user text.
+    const el = root as HTMLElement;
+    return el.innerText || el.textContent || '';
   },
 
   onSubmit(root, cb) {

@@ -43,8 +43,9 @@ describe('chatgpt adapter', () => {
 
     const sendMessage = (globalThis as any).chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
     expect(sendMessage).toHaveBeenCalled();
-    const [msg] = sendMessage.mock.calls[0]!;
-    expect(msg.kind).toBe('prompt');
+    const promptCall = sendMessage.mock.calls.find((c) => (c[0] as any)?.kind === 'prompt');
+    expect(promptCall).toBeDefined();
+    const msg = promptCall![0] as any;
     expect(msg.payload.source).toBe('chatgpt');
     expect(msg.payload.prompt_text).toBe('이 코드 좀 봐줘');
     expect(msg.payload.browser_session_id).toBe('test-session-abc');

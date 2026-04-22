@@ -22,9 +22,14 @@ export async function rewriteCmd(id: string, opts: { copy?: boolean }): Promise<
   const db = openDb();
   const config = loadConfig();
   const paths = getPaths();
+  interface UsageRow {
+    id: string;
+    prompt_text: string;
+    pii_masked: string;
+  }
   const u = db
     .prepare(`SELECT * FROM prompt_usages WHERE id=? OR id LIKE ? ORDER BY created_at DESC LIMIT 1`)
-    .get(id, `%${id}`) as any;
+    .get(id, `%${id}`) as UsageRow | undefined;
   if (!u) {
     console.log(pc.red('no matching prompt'));
     db.close();
@@ -46,9 +51,14 @@ export async function rewriteCmd(id: string, opts: { copy?: boolean }): Promise<
     return;
   }
 
+  interface RuleHitRow {
+    rule_id: string;
+    severity: number;
+    message: string;
+  }
   const hits = db
     .prepare(`SELECT rule_id, severity, message FROM rule_hits WHERE usage_id=?`)
-    .all(u.id) as any[];
+    .all(u.id) as RuleHitRow[];
   const body = [
     '[ORIGINAL PROMPT]',
     u.pii_masked,

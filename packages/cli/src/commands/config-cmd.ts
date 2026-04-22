@@ -1,8 +1,11 @@
 import { loadConfig, saveConfig, setConfigValue } from '@think-prompt/core';
 import pc from 'picocolors';
 
-function getDeep(obj: any, key: string): unknown {
-  return key.split('.').reduce((acc: any, k) => (acc == null ? undefined : acc[k]), obj);
+function getDeep(obj: unknown, key: string): unknown {
+  return key.split('.').reduce<unknown>((acc, k) => {
+    if (acc == null || typeof acc !== 'object') return undefined;
+    return (acc as Record<string, unknown>)[k];
+  }, obj);
 }
 
 function coerce(value: string): unknown {

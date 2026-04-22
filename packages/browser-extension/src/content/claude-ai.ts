@@ -11,7 +11,10 @@ const claudeAi: PromptHook = {
   },
 
   readPrompt(root) {
-    return (root as HTMLElement).innerText;
+    // jsdom does not implement `innerText`; fall back to `textContent` so
+    // unit tests and headless environments still capture user text.
+    const el = root as HTMLElement;
+    return (el.innerText || el.textContent || '').trim();
   },
 
   onSubmit(root, cb) {

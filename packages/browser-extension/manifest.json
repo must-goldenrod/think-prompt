@@ -3,7 +3,7 @@
   "name": "Think-Prompt for Web",
   "version": "0.3.0",
   "description": "Local-first prompt coach for ChatGPT, Claude.ai, Gemini, Perplexity, and Genspark. Your prompts stay on your machine.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "alarms"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",

@@ -21,6 +21,11 @@ const PATTERNS: Array<{ kind: string; re: RegExp; token: string }> = [
   { kind: 'rrn', re: /\b\d{6}-?[1-4]\d{6}\b/g, token: '<RRN>' },
   { kind: 'credit_card', re: /\b(?:\d[ -]?){13,19}\b/g, token: '<CARD>' },
   { kind: 'phone_kr', re: /\b0\d{1,2}[- .]?\d{3,4}[- .]?\d{4}\b/g, token: '<PHONE>' },
+  {
+    kind: 'phone_intl',
+    re: /\+\d{1,3}[- .]?\d{2,4}[- .]?\d{3,4}[- .]?\d{3,4}/g,
+    token: '<PHONE>',
+  },
   { kind: 'aws_akid', re: /\bAKIA[0-9A-Z]{16}\b/g, token: '<AWS_KEY>' },
   { kind: 'aws_asia', re: /\bASIA[0-9A-Z]{16}\b/g, token: '<AWS_KEY>' },
   { kind: 'github_token', re: /\bghp_[A-Za-z0-9]{36}\b/g, token: '<GITHUB_TOKEN>' },

@@ -11,7 +11,9 @@ const perplexity: PromptHook = {
   },
 
   readPrompt(root) {
-    return (root as HTMLTextAreaElement).value ?? (root as HTMLElement).innerText;
+    if (root instanceof HTMLTextAreaElement) return root.value;
+    const el = root as HTMLElement;
+    return el.innerText || el.textContent || '';
   },
 
   onSubmit(root, cb) {

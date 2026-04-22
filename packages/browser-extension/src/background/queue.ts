@@ -4,11 +4,18 @@
  * Service workers can be killed at any time. We persist every captured
  * prompt to IndexedDB as soon as it arrives, then attempt sync. The local
  * agent accepting the row flips `synced` to true.
+ *
+ * After MAX_ATTEMPTS consecutive sync failures we mark the row `poisoned`
+ * so `pendingRows()` stops returning it — the popup surfaces the count
+ * and the user can trigger a manual retry from Options (future work).
  */
 
 const DB_NAME = 'think-prompt-ext';
 const STORE = 'ingest';
 const DB_VERSION = 1;
+
+/** Upper bound on sync retries before a row is parked as poisoned. */
+export const MAX_ATTEMPTS = 5;
 
 export interface QueueRow {
   id: string; // prompt_hash + timestamp
@@ -21,6 +28,8 @@ export interface QueueRow {
   synced: boolean;
   attempts: number;
   last_error?: string;
+  /** Marked `true` once attempts >= MAX_ATTEMPTS; excluded from pendingRows(). */
+  poisoned?: boolean;
 }
 
 function open(): Promise<IDBDatabase> {
@@ -80,6 +89,9 @@ export async function markError(id: string, err: string): Promise<void> {
       if (row) {
         row.last_error = err;
         row.attempts = (row.attempts ?? 0) + 1;
+        if (row.attempts >= MAX_ATTEMPTS && !row.synced) {
+          row.poisoned = true;
+        }
         store.put(row);
       }
     };
@@ -87,6 +99,17 @@ export async function markError(id: string, err: string): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
   db.close();
+}
+
+/**
+ * Predicate: is this row still eligible for retry?
+ * Exposed so unit tests can exercise the retry/poisoning boundary without
+ * booting IndexedDB.
+ */
+export function isRowRetriable(row: QueueRow): boolean {
+  if (row.synced) return false;
+  if (row.poisoned) return false;
+  return (row.attempts ?? 0) < MAX_ATTEMPTS;
 }
 
 export async function pendingRows(limit = 50): Promise<QueueRow[]> {
@@ -98,7 +121,7 @@ export async function pendingRows(limit = 50): Promise<QueueRow[]> {
       .index('synced')
       .getAll(IDBKeyRange.only(false as any));
     req.onsuccess = () => {
-      const rows = (req.result as QueueRow[]).slice(0, limit);
+      const rows = (req.result as QueueRow[]).filter(isRowRetriable).slice(0, limit);
       resolve(rows);
     };
     req.onerror = () => reject(req.error);
@@ -106,7 +129,12 @@ export async function pendingRows(limit = 50): Promise<QueueRow[]> {
   });
 }
 
-export async function stats(): Promise<{ total: number; synced: number; pending: number }> {
+export async function stats(): Promise<{
+  total: number;
+  synced: number;
+  pending: number;
+  poisoned: number;
+}> {
   const db = await open();
   return await new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
@@ -114,7 +142,9 @@ export async function stats(): Promise<{ total: number; synced: number; pending:
     req.onsuccess = () => {
       const rows = req.result as QueueRow[];
       const synced = rows.filter((r) => r.synced).length;
-      resolve({ total: rows.length, synced, pending: rows.length - synced });
+      const poisoned = rows.filter((r) => r.poisoned).length;
+      const pending = rows.length - synced - poisoned;
+      resolve({ total: rows.length, synced, pending, poisoned });
     };
     req.onerror = () => reject(req.error);
     tx.oncomplete = () => db.close();

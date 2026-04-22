@@ -1,12 +1,42 @@
 import { openDb } from '@think-prompt/core';
 import pc from 'picocolors';
 
-function matchUsage(db: any, id: string): any | undefined {
+interface UsageRow {
+  id: string;
+  session_id: string;
+  prompt_text: string;
+  char_len: number;
+  word_count: number;
+  turn_index: number;
+  created_at: string;
+}
+interface QualityScoreRow {
+  rule_score: number;
+  usage_score: number | null;
+  judge_score: number | null;
+  final_score: number;
+  tier: string;
+}
+interface RuleHitRow {
+  rule_id: string;
+  severity: number;
+  message: string;
+}
+interface RewriteRow {
+  status: string;
+  after_text: string;
+  reason: string | null;
+}
+
+type DbHandle = ReturnType<typeof openDb>;
+
+function matchUsage(db: DbHandle, id: string): UsageRow | undefined {
   // Allow short suffix matching for convenience.
-  if (id.length === 26) return db.prepare(`SELECT * FROM prompt_usages WHERE id=?`).get(id);
+  if (id.length === 26)
+    return db.prepare(`SELECT * FROM prompt_usages WHERE id=?`).get(id) as UsageRow | undefined;
   return db
     .prepare(`SELECT * FROM prompt_usages WHERE id LIKE ? ORDER BY created_at DESC LIMIT 1`)
-    .get(`%${id}`);
+    .get(`%${id}`) as UsageRow | undefined;
 }
 
 export async function showCmd(id: string): Promise<void> {
@@ -16,13 +46,15 @@ export async function showCmd(id: string): Promise<void> {
     console.log(pc.red('no matching prompt'));
     return;
   }
-  const score = db.prepare(`SELECT * FROM quality_scores WHERE usage_id=?`).get(u.id) as any;
+  const score = db.prepare(`SELECT * FROM quality_scores WHERE usage_id=?`).get(u.id) as
+    | QualityScoreRow
+    | undefined;
   const hits = db
     .prepare(`SELECT * FROM rule_hits WHERE usage_id=? ORDER BY severity DESC`)
-    .all(u.id) as any[];
+    .all(u.id) as RuleHitRow[];
   const rewrite = db
     .prepare(`SELECT * FROM rewrites WHERE usage_id=? ORDER BY created_at DESC LIMIT 1`)
-    .get(u.id) as any;
+    .get(u.id) as RewriteRow | undefined;
 
   console.log(pc.bold(`Prompt ${u.id}`));
   console.log(`  session: ${u.session_id}`);

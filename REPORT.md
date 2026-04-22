@@ -1,7 +1,8 @@
 # Think-Prompt v0.1.0 — 빌드 리포트
 
-**세션 날짜:** 2026-04-20
-**상태:** 전 기능 구현 완료 · CI 전 단계 통과 · 스모크 테스트 통과
+**최초 빌드:** 2026-04-20
+**마지막 업데이트:** 2026-04-22 (browser-extension v0.3.0 + autostart 스캐폴딩 + B1/B2/B3 안정화)
+**상태:** 전 기능 구현 완료 · CI 전 단계 통과 · 스모크 테스트 통과 · 운영 안정화 진행 중
 
 ---
 
@@ -13,50 +14,49 @@
 
 ---
 
-## 1. 구현된 패키지 (6개 · monorepo)
+## 1. 구현된 패키지 (7개 · monorepo)
 
 | 패키지 | 역할 | 빌드 산출물 |
 |---|---|---|
-| `@think-prompt/core` | SQLite DB · 설정 · 로거 · PII · 스코어러 · 큐 · 트랜스크립트 파서 · Anthropic 클라이언트 | `dist/index.js` (24 KB), `dist/db.js`, `dist/transcript/parser.js` |
-| `@think-prompt/rules` | 안티패턴 룰 R001~R012 + 카탈로그 | `dist/index.js` (9.9 KB) |
-| `@think-prompt/agent` | Fastify HTTP 훅 수신기(6개 엔드포인트) | `dist/index.js` (8.5 KB) bin: `think-prompt-agent` |
-| `@think-prompt/worker` | 큐 소비 데몬 — 트랜스크립트 파싱 · LLM 심판 · 리라이터 | `dist/index.js` (11.8 KB) bin: `think-prompt-worker` |
-| `@think-prompt/dashboard` | 로컬 웹 UI (Fastify + Tailwind CDN + htmx) | `dist/index.js` (21.4 KB) bin: `think-prompt-dashboard` |
-| `@think-prompt/cli` | 18개 서브커맨드 (install/start/doctor/list/rewrite …) | `dist/index.js` (28.2 KB) bin: `think-prompt` |
+| `@think-prompt/core` | SQLite DB · 설정 · 로거 · PII · 스코어러 · 큐 · 트랜스크립트 파서 · Anthropic 클라이언트 | `dist/index.js`, `dist/db.js`, `dist/transcript/parser.js` |
+| `@think-prompt/rules` | 안티패턴 룰 R001~R013 + 카탈로그 | `dist/index.js` |
+| `@think-prompt/agent` | Fastify HTTP 훅 수신기(6 hook routes + `/v1/ingest/web`) | `dist/index.js` bin: `think-prompt-agent` |
+| `@think-prompt/worker` | 큐 소비 데몬 — 트랜스크립트 파싱 · LLM 심판 · 리라이터 | `dist/index.js` bin: `think-prompt-worker` |
+| `@think-prompt/dashboard` | 로컬 웹 UI (Fastify + eta + Tailwind CDN + htmx) | `dist/index.js` bin: `think-prompt-dashboard` |
+| `@think-prompt/cli` | 19개 서브커맨드 (install/start/doctor/list/rewrite/autostart …) | `dist/index.js` (~35 KB) bin: `think-prompt` |
+| `@think-prompt/browser-extension` | Chrome MV3 — ChatGPT/Claude/Gemini/Perplexity/Genspark 어댑터 | `dist/extension/` (esbuild) |
 
-**구조:** `pnpm` workspace · TypeScript strict + exactOptionalPropertyTypes · ESM.
+**구조:** `pnpm` workspace · TypeScript strict + exactOptionalPropertyTypes · ESM. **DB 스키마:** v3.
 
 ---
 
-## 2. CI 상태 (2026-04-20 16:52 KST)
+## 2. CI 상태 (2026-04-22 갱신)
 
 ```
 === typecheck ===
-packages/core typecheck: Done
-packages/rules typecheck: Done
-packages/agent typecheck: Done
-packages/worker typecheck: Done
-packages/dashboard typecheck: Done
-packages/cli typecheck: Done
+7/7 packages: Done
 
 === test ===
- ✓ @think-prompt/core   test/parser.test.ts    (7 tests)
- ✓ @think-prompt/core   test/scorer.test.ts    (9 tests)
- ✓ @think-prompt/core   test/pii.test.ts       (7 tests)
- ✓ @think-prompt/core   test/db.test.ts        (4 tests)
- ✓ @think-prompt/rules  test/rules.test.ts     (11 tests)
- ✓ @think-prompt/agent  test/server.test.ts    (4 tests)
- ✓ @think-prompt/worker test/jobs.test.ts      (3 tests)
- ✓ @think-prompt/dashboard test/server.test.ts (3 tests)
- ✓ @think-prompt/cli    test/settings-merge.test.ts (5 tests)
- Test Files  9 passed | Tests  53 passed
+ ✓ 14 test files | 128 tests passed | 0 failed
+   - @think-prompt/core            (parser·scorer·pii·db)
+   - @think-prompt/rules           (rules)
+   - @think-prompt/agent           (server — 8 tests)
+   - @think-prompt/worker          (jobs — 4 tests, +1 새 케이스)
+   - @think-prompt/dashboard       (server — 4 tests)
+   - @think-prompt/cli             (settings-merge)
+   - @think-prompt/browser-extension (chatgpt-adapter + pii)
 
 === lint (biome) ===
-Found 0 errors · 52 warnings (모두 스타일 경고)
+Found 0 errors · 56 warnings (대부분 `any` 사용 — I2 cleanup 진행 중)
 
 === build ===
-6/6 packages built successfully
+7/7 packages built successfully
 ```
+
+**최근 안정화 (2026-04-22):**
+- B1: `jsdom`이 워크스페이스 루트 devDeps에 누락돼 `pnpm test`가 무너졌던 것 수정 (`pnpm add -Dw jsdom @types/jsdom`)
+- B2: `parse_subagent_transcript` job이 transcript 미존재 시 4회 retry 후 DLQ로 흘러가던 흐름을 1회 시도 후 `done`+drop로 변경. DLQ 노이즈 28건 → 0건 예상
+- B3: agent `subagent-stop`이 `subagent-start` 누락 케이스에서 SQLITE_CONSTRAINT_FOREIGNKEY로 실패하던 것 수정 — `upsertSession` 방어 호출 추가
 
 ---
 
@@ -204,7 +204,14 @@ HTML 정상 렌더, Tailwind CDN 로드
 ### 6.5 아직 안 한 것
 - GitHub 리포 생성 · 첫 푸시 (유저가 리모트 생성 후 `git remote add` + push)
 - npm publish (v0.1.0 릴리스는 유저 결정 후)
-- M0 실측 (유저 작업)
+- M0 실측 (유저 작업) — 현재 prompt_usages 5+ 캡처되며 O-001/003/005/007은 99-observation-log.md에 resolved 기록됨. 나머지 O-002/004/006/008/009/010은 사용자 시나리오 검증 필요
+- I1: CLI 패키지 테스트 커버리지 (현재 17 src · 2 test — autostart 16건 + settings-merge 5건) 상향 — install/doctor/list/show/rewrite 등 미테스트 영역 추가
+- I2: 남은 lint warnings 40건 (`any` → `unknown`+narrow) 정리 — 핵심 16건은 2026-04-22 처리 완료, 비핵심 40건 (logger / llm / settings-merge / browser-extension internal 등) 후속
+
+### 6.6 운영 자동화 (2026-04-22 추가)
+- macOS launchd LaunchAgent 3개로 agent/worker/dashboard 자동 기동 적용 — `~/Library/LaunchAgents/com.thinkprompt.{agent,worker,dashboard}.plist`
+- `KeepAlive: { SuccessfulExit: false }` — 충돌 시만 부활, `think-prompt stop` 존중
+- `think-prompt autostart status`로 점검 가능 (enable은 [WIP — policy TODO])
 
 ---
 
@@ -240,15 +247,16 @@ think-prompt/
 │   ├── conversation-log.md
 │   └── proposal-draft.md
 └── packages/
-    ├── core/   (3 migrations · 7 src · 4 test)
-    ├── rules/  (types · keywords · 12 rules · registry · test)
-    ├── agent/  (server with 6 routes · index · test)
-    ├── worker/ (jobs.ts with 5 handlers · index · test)
-    ├── dashboard/ (server with 7 routes · html helper · test)
-    └── cli/    (18 subcommands · daemon lifecycle · settings merge · test)
+    ├── core/   (3 migrations · 14 src · 5 test)
+    ├── rules/  (types · keywords · 13 rules · registry · 2 test)
+    ├── agent/  (server with 6 hook routes + /v1/ingest/web · 1 test)
+    ├── worker/ (jobs.ts with 5 handlers · index · 1 test)
+    ├── dashboard/ (server with 7 routes · html helper · 1 test)
+    ├── cli/    (19 subcommands · daemon lifecycle · settings merge · autostart · 1 test)
+    └── browser-extension/ (MV3 · 5 site adapters · background queue · pii · 2 test)
 ```
 
-총 파일 수: 약 **75개** (설계 문서 12 + 소스/설정 63).
+총 파일 수: **80+** (설계 문서 13 + 소스/설정 70+).
 
 ---
 
@@ -269,4 +277,5 @@ think-prompt reprocess --all|--session <id>
 think-prompt export --since 30d --out file.json
 think-prompt open
 think-prompt wipe --yes
+think-prompt autostart status            # launchd / systemd unit 점검
 ```

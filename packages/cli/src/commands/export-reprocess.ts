@@ -11,10 +11,12 @@ import {
 import { runRules } from '@think-prompt/rules';
 import pc from 'picocolors';
 
+type SqliteParam = string | number | null | bigint | Buffer;
+
 export async function exportCmd(opts: { since?: string; out: string }): Promise<void> {
   const db = openDb();
   let where = '';
-  const args: any[] = [];
+  const args: SqliteParam[] = [];
   if (opts.since) {
     where = `WHERE created_at > datetime('now', ?)`;
     const s = opts.since.startsWith('-') ? opts.since : `-${opts.since}`;
@@ -23,10 +25,10 @@ export async function exportCmd(opts: { since?: string; out: string }): Promise<
   }
   const usages = db
     .prepare(`SELECT * FROM prompt_usages ${where} ORDER BY created_at DESC`)
-    .all(...args) as any[];
-  const scores = db.prepare(`SELECT * FROM quality_scores`).all() as any[];
-  const hits = db.prepare(`SELECT * FROM rule_hits`).all() as any[];
-  const sessions = db.prepare(`SELECT * FROM sessions`).all() as any[];
+    .all(...args) as Record<string, unknown>[];
+  const scores = db.prepare(`SELECT * FROM quality_scores`).all() as Record<string, unknown>[];
+  const hits = db.prepare(`SELECT * FROM rule_hits`).all() as Record<string, unknown>[];
+  const sessions = db.prepare(`SELECT * FROM sessions`).all() as Record<string, unknown>[];
   const payload = {
     exported_at: new Date().toISOString(),
     usages,
@@ -50,13 +52,14 @@ export async function reprocessCmd(opts: { session?: string; all?: boolean }): P
     word_count: number;
     cwd: string;
   }[] = [];
+  type ReprocessTarget = (typeof targets)[number];
   if (opts.all) {
     const rows = db
       .prepare(
         `SELECT pu.id, pu.prompt_text, pu.session_id, pu.char_len, pu.word_count, s.cwd
            FROM prompt_usages pu JOIN sessions s ON s.id = pu.session_id`
       )
-      .all() as any[];
+      .all() as ReprocessTarget[];
     targets.push(...rows);
   } else if (opts.session) {
     const rows = db
@@ -65,7 +68,7 @@ export async function reprocessCmd(opts: { session?: string; all?: boolean }): P
            FROM prompt_usages pu JOIN sessions s ON s.id = pu.session_id
           WHERE pu.session_id = ?`
       )
-      .all(opts.session) as any[];
+      .all(opts.session) as ReprocessTarget[];
     targets.push(...rows);
   } else {
     console.log(pc.red('pass --all or --session <id>'));

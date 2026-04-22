@@ -198,6 +198,7 @@ describe('agent server', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/ingest/web',
+      headers: { 'x-think-prompt-ext': '1' },
       payload: {
         source: 'chatgpt',
         browser_session_id: 'c-abc-123',
@@ -218,6 +219,7 @@ describe('agent server', () => {
     await app.inject({
       method: 'POST',
       url: '/v1/ingest/web',
+      headers: { 'x-think-prompt-ext': '1' },
       payload: {
         source: 'claude-ai',
         browser_session_id: 'c-xyz-777',
@@ -231,5 +233,22 @@ describe('agent server', () => {
       | undefined;
     expect(row?.source).toBe('claude-ai');
     db.close();
+  });
+
+  it('/v1/ingest/web rejects requests missing the X-Think-Prompt-Ext header', async () => {
+    const app = buildAgentServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/ingest/web',
+      payload: {
+        source: 'chatgpt',
+        browser_session_id: 'c-nope',
+        prompt_text: 'drive-by',
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    const body = res.json();
+    expect(body.ok).toBe(false);
+    await app.close();
   });
 });
