@@ -1,7 +1,7 @@
 /**
  * `think-prompt analyze <id>` — the CLI entry point for deep analysis.
  *
- * Consent-gated per docs/00-decision-log.md D-032. Three gates must ALL
+ * Consent-gated per docs/00-decision-log.md D-033. Three gates must ALL
  * pass before any network traffic happens:
  *
  *   1. `llm.enabled` is true in config                        (existing D-015)

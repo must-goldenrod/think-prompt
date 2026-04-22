@@ -178,7 +178,7 @@ UPDATE sessions SET source = 'claude-code' WHERE source IS NULL;
  * a single structured row. Kept separate from `rewrites` so the shape can
  * evolve without breaking historical rows.
  *
- * See docs/00-decision-log.md D-032.
+ * See docs/00-decision-log.md D-033.
  */
 export const MIGRATION_004: string = `
 CREATE TABLE IF NOT EXISTS deep_analyses (

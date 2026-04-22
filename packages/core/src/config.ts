@@ -47,7 +47,7 @@ export const ConfigSchema = z.object({
     })
     .default({}),
   i18n: z.enum(['ko', 'en', 'zh', 'es', 'ja']).default('ko'),
-  // Deep-analysis consent state — see docs/00-decision-log.md D-032.
+  // Deep-analysis consent state — see docs/00-decision-log.md D-033.
   //   'pending' — user hasn't been asked yet
   //   'granted' — user explicitly opted in; the dashboard / CLI may
   //               send masked prompt text to the configured LLM for a

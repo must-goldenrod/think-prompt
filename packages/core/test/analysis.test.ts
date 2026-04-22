@@ -74,12 +74,17 @@ describe('deep_analyses persistence', () => {
     db.close();
   });
 
-  it('returns history newest-first', () => {
+  it('returns history newest-first', async () => {
     const db = openDb();
     upsertSession(db, { id: 's-c', cwd: '/tmp' });
     const u = insertPromptUsage(db, { session_id: 's-c', prompt_text: 'something' });
 
-    // Insert three with artificial time ordering (SQL created_at uses ISO strings).
+    // `insertDeepAnalysis` stamps `created_at = new Date().toISOString()` at
+    // millisecond resolution. Three synchronous calls on fast CI runners can
+    // land in the same millisecond with identical ULIDs ordering, so the
+    // "newest first" assertion becomes flaky. A small awaited delay forces
+    // strictly increasing timestamps and makes the test deterministic across
+    // Linux/macOS × Node 20/22.
     for (let i = 0; i < 3; i++) {
       insertDeepAnalysis(db, {
         usage_id: u.id,
@@ -89,11 +94,11 @@ describe('deep_analyses persistence', () => {
         reasoning: [`attempt #${i + 1}`],
         after_text: `rewrite ${i + 1}`,
       });
+      await new Promise((resolve) => setTimeout(resolve, 3));
     }
 
     const rows = getDeepAnalyses(db, u.id);
     expect(rows).toHaveLength(3);
-    // Newest first → reasoning[0] on the first row should be "#3".
     expect(rows[0]?.reasoning[0]).toBe('attempt #3');
     expect(rows[2]?.reasoning[0]).toBe('attempt #1');
     db.close();

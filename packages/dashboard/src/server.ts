@@ -823,7 +823,7 @@ think-prompt coach on</pre>
   });
 
   // POST /settings/consent — form-encoded {decision: grant|revoke}. Persists
-  // the user's deep-analysis consent choice to config.json (D-032).
+  // the user's deep-analysis consent choice to config.json (D-033).
   fastify.post<{ Body: { decision?: string; return_to?: string } }>(
     '/settings/consent',
     async (req, reply) => {

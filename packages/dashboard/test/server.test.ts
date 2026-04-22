@@ -314,7 +314,7 @@ describe('dashboard i18n', () => {
   });
 });
 
-describe('deep analysis UI (D-032)', () => {
+describe('deep analysis UI (D-033)', () => {
   it('shows a consent banner on prompt detail when deep_consent is pending (default)', async () => {
     const db = openDb();
     upsertSession(db, { id: 's-consent', cwd: '/tmp' });

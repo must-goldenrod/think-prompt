@@ -14,7 +14,7 @@
  * enforced by `runDeepAnalysis` preferring `pii_masked` over `prompt_text`
  * whenever the masked copy is non-empty.
  *
- * See docs/00-decision-log.md D-015 (LLM SDK), D-032 (deep analysis
+ * See docs/00-decision-log.md D-015 (LLM SDK), D-033 (deep analysis
  * consent policy).
  */
 import type { Database as Db } from 'better-sqlite3';

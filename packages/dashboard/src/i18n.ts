@@ -121,7 +121,7 @@ export interface Dictionary {
   'tier.bad': string;
   'tier.na': string;
 
-  /* deep analysis (D-032) */
+  /* deep analysis (D-033) */
   'detail.deep_analysis': string;
   'analysis.consent_title': string;
   'analysis.consent_body': string;
