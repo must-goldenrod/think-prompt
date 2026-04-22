@@ -47,6 +47,18 @@ export const ConfigSchema = z.object({
     })
     .default({}),
   i18n: z.enum(['ko', 'en', 'zh', 'es', 'ja']).default('ko'),
+  // Deep-analysis consent state — see docs/00-decision-log.md D-032.
+  //   'pending' — user hasn't been asked yet
+  //   'granted' — user explicitly opted in; the dashboard / CLI may
+  //               send masked prompt text to the configured LLM for a
+  //               structured problem-diagnosis + rewrite response
+  //   'denied'  — user explicitly opted out
+  analysis: z
+    .object({
+      deep_consent: z.enum(['pending', 'granted', 'denied']).default('pending'),
+      deep_consent_at: z.string().nullable().default(null),
+    })
+    .default({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { analyzeCmd } from './commands/analyze.js';
 import {
   autostartDisableCmd,
   autostartEnableCmd,
@@ -54,6 +55,13 @@ program
   .description('generate LLM rewrite suggestion (requires llm.enabled)')
   .option('--copy', 'copy the rewrite to clipboard')
   .action(rewriteCmd);
+
+program
+  .command('analyze [id]')
+  .description('deep-analyze a prompt — problems + reasoning + rewrite (requires consent)')
+  .option('--grant-consent', 'set analysis.deep_consent=granted in config')
+  .option('--revoke-consent', 'set analysis.deep_consent=denied in config')
+  .action(analyzeCmd);
 
 program.command('coach <state>').description('toggle inline coach mode (on/off)').action(coachCmd);
 

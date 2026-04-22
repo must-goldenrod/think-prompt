@@ -1,15 +1,26 @@
 import {
   type Config,
+  type DeepAnalysisRow,
   createLogger,
+  getDeepAnalyses,
   getOutcomeTotals,
   getPaths,
   loadConfig,
   openDb,
   recordOutcome,
+  runDeepAnalysis,
+  saveConfig,
+  setConfigValue,
 } from '@think-prompt/core';
 import { getRulesCatalog } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
-import { escapeHtml, layout, renderDailyChart, tierBadge } from './html.js';
+import {
+  escapeHtml,
+  layout,
+  renderDailyChart,
+  renderDeepAnalysisSection,
+  tierBadge,
+} from './html.js';
 import { type Locale, resolveLocale, t } from './i18n.js';
 
 export interface DashboardDeps {
@@ -463,8 +474,15 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       after_text: string;
       reason: string | null;
     }>;
+    const deepAnalyses = getDeepAnalyses(db, id);
     const fb = getOutcomeTotals(db, id);
     const detected = u.detected_language ?? '?';
+
+    // Re-read config each request so consent changes made via the CLI are
+    // picked up without a dashboard restart.
+    const currentConfig = loadConfig(deps.rootOverride);
+    const consentState = currentConfig.analysis.deep_consent;
+    const analyzeEnabled = currentConfig.llm.enabled && consentState === 'granted';
 
     const body = `
       <div class="mb-3"><a href="/prompts?lang=${locale}" class="text-blue-600 text-sm">${escapeHtml(t(locale, 'common.back'))}</a></div>
@@ -529,7 +547,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </div>
 
       <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.suggested_rewrites'))}</h2>
-      <div class="space-y-3">
+      <div class="space-y-3 mb-6">
         ${
           rewrites.length === 0
             ? `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'detail.rewrite_none'))}<code>think-prompt rewrite ${escapeHtml(u.id)}</code></div>`
@@ -544,7 +562,10 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                 )
                 .join('')
         }
-      </div>`;
+      </div>
+
+      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.deep_analysis'))}</h2>
+      ${renderDeepAnalysisSection(u.id, locale, consentState, currentConfig.llm.enabled, analyzeEnabled, deepAnalyses)}`;
     reply.type('text/html; charset=utf-8').send(
       layout(t(locale, 'detail.title'), body, locale, {
         reqPath: `/prompts/${u.id}`,
@@ -798,6 +819,64 @@ think-prompt coach on</pre>
       return;
     }
     recordOutcome(db, id, rating, body.note ?? null);
+    reply.redirect(`/prompts/${id}`);
+  });
+
+  // POST /settings/consent — form-encoded {decision: grant|revoke}. Persists
+  // the user's deep-analysis consent choice to config.json (D-032).
+  fastify.post<{ Body: { decision?: string; return_to?: string } }>(
+    '/settings/consent',
+    async (req, reply) => {
+      const body = (req.body ?? {}) as { decision?: string; return_to?: string };
+      if (body.decision !== 'grant' && body.decision !== 'revoke') {
+        reply.code(400).type('text/plain').send('decision must be grant or revoke');
+        return;
+      }
+      const cfg = loadConfig(deps.rootOverride);
+      const next = body.decision === 'grant' ? 'granted' : 'denied';
+      let updated = setConfigValue(cfg, 'analysis.deep_consent', next);
+      updated = setConfigValue(updated, 'analysis.deep_consent_at', new Date().toISOString());
+      saveConfig(updated, deps.rootOverride);
+      reply.redirect(body.return_to || '/');
+    }
+  );
+
+  // POST /prompts/:id/analyze — run a deep analysis on demand. Gates:
+  // llm.enabled, API key, consent === granted. Any gate failure returns 400.
+  fastify.post<{ Params: { id: string } }>('/prompts/:id/analyze', async (req, reply) => {
+    const { id } = req.params;
+    const cfg = loadConfig(deps.rootOverride);
+    if (!cfg.llm.enabled) {
+      reply
+        .code(400)
+        .type('text/plain')
+        .send('llm is disabled — think-prompt config set llm.enabled true');
+      return;
+    }
+    if (cfg.analysis.deep_consent !== 'granted') {
+      reply.code(400).type('text/plain').send('deep-analysis consent not granted');
+      return;
+    }
+    const apiKey = process.env[cfg.llm.api_key_env];
+    if (!apiKey) {
+      reply
+        .code(400)
+        .type('text/plain')
+        .send(`${cfg.llm.api_key_env} is not set in the environment`);
+      return;
+    }
+    const row = db.prepare(`SELECT id FROM prompt_usages WHERE id=?`).get(id) as
+      | { id: string }
+      | undefined;
+    if (!row) {
+      reply.code(404).type('text/plain').send('prompt not found');
+      return;
+    }
+    try {
+      await runDeepAnalysis(db, { usage_id: id, apiKey, model: cfg.llm.model });
+    } catch (err) {
+      logger.error({ err }, 'deep analysis threw');
+    }
     reply.redirect(`/prompts/${id}`);
   });
 

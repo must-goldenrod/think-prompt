@@ -169,3 +169,32 @@ ALTER TABLE prompt_usages ADD COLUMN browser_session_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_sessions_source ON sessions(source);
 UPDATE sessions SET source = 'claude-code' WHERE source IS NULL;
 `;
+
+/**
+ * v0.4.0 schema additions — deep LLM analysis (consent-gated).
+ *
+ * A deep analysis is richer than a simple rewrite: it exposes identified
+ * problem categories, step-by-step reasoning, and the suggested rewrite in
+ * a single structured row. Kept separate from `rewrites` so the shape can
+ * evolve without breaking historical rows.
+ *
+ * See docs/00-decision-log.md D-032.
+ */
+export const MIGRATION_004: string = `
+CREATE TABLE IF NOT EXISTS deep_analyses (
+  id                TEXT PRIMARY KEY,
+  usage_id          TEXT NOT NULL REFERENCES prompt_usages(id),
+  model             TEXT NOT NULL,
+  status            TEXT NOT NULL,            -- 'ok' | 'failed'
+  problems_json     TEXT NOT NULL,            -- JSON: [{category, severity, explanation}]
+  reasoning_json    TEXT NOT NULL,            -- JSON: string[]
+  after_text        TEXT NOT NULL,
+  applied_fixes     TEXT,                     -- JSON: string[] (rule ids)
+  input_tokens      INTEGER,
+  output_tokens     INTEGER,
+  error_message     TEXT,
+  created_at        DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_deep_usage ON deep_analyses(usage_id);
+CREATE INDEX IF NOT EXISTS idx_deep_created ON deep_analyses(created_at DESC);
+`;
