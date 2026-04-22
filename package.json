@@ -16,7 +16,9 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "ci": "pnpm build && pnpm typecheck && pnpm lint && pnpm test",
-    "clean": "pnpm -r exec rm -rf dist node_modules/.cache"
+    "clean": "pnpm -r exec rm -rf dist node_modules/.cache",
+    "release:bump": "node scripts/bump-versions.mjs",
+    "release:dry": "pnpm -r --filter='./packages/core' --filter='./packages/rules' --filter='./packages/agent' --filter='./packages/worker' --filter='./packages/dashboard' --filter='./packages/cli' pack --pack-destination ./.dry-publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

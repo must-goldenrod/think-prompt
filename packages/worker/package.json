@@ -1,8 +1,20 @@
 {
   "name": "@think-prompt/worker",
   "version": "0.1.0",
-  "description": "Background worker: transcript parsing, LLM judge, rewriter",
+  "description": "Think-Prompt background worker: transcript parsing, LLM judge, rewriter",
   "type": "module",
+  "license": "MIT",
+  "author": "Think-Prompt contributors",
+  "homepage": "https://github.com/must-goldenrod/think-prompt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/must-goldenrod/think-prompt.git",
+    "directory": "packages/worker"
+  },
+  "bugs": {
+    "url": "https://github.com/must-goldenrod/think-prompt/issues"
+  },
+  "keywords": ["claude-code", "queue", "background-worker", "local-first"],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +28,13 @@
     }
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

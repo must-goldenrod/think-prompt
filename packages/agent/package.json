@@ -1,8 +1,20 @@
 {
   "name": "@think-prompt/agent",
   "version": "0.1.0",
-  "description": "Local HTTP agent receiving Claude Code hooks",
+  "description": "Think-Prompt local HTTP hook receiver (127.0.0.1:47823)",
   "type": "module",
+  "license": "MIT",
+  "author": "Think-Prompt contributors",
+  "homepage": "https://github.com/must-goldenrod/think-prompt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/must-goldenrod/think-prompt.git",
+    "directory": "packages/agent"
+  },
+  "bugs": {
+    "url": "https://github.com/must-goldenrod/think-prompt/issues"
+  },
+  "keywords": ["claude-code", "hooks", "fastify", "local-first"],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +28,13 @@
     }
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

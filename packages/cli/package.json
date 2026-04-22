@@ -1,8 +1,31 @@
 {
   "name": "@think-prompt/cli",
   "version": "0.1.0",
-  "description": "Think-Prompt CLI — install, start/stop, list, doctor, rewrite",
+  "description": "Think-Prompt CLI — Claude Code prompt collector + local-first quality coach. Scan ~/.claude history, score with R001..R018 rules, deep analysis with consent.",
   "type": "module",
+  "license": "MIT",
+  "author": "Think-Prompt contributors",
+  "homepage": "https://github.com/must-goldenrod/think-prompt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/must-goldenrod/think-prompt.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/must-goldenrod/think-prompt/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "prompt",
+    "prompt-engineering",
+    "developer-tool",
+    "cli",
+    "local-first",
+    "privacy",
+    "coaching",
+    "anthropic"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,6 +33,13 @@
     "think-prompt": "./dist/index.js"
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit"

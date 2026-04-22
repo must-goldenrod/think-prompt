@@ -63,10 +63,59 @@ pnpm run ci            # typecheck + lint + test + build
 
 ## Releasing (maintainers only)
 
-1. Update `CHANGELOG.md` under the new version.
-2. Bump versions in each `packages/*/package.json`.
-3. Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-4. `gh release create vX.Y.Z --notes-file ...` (or let CI handle it).
+Publishing is automated end-to-end: a pushed `vX.Y.Z` tag triggers
+`.github/workflows/release.yml`, which rebuilds, re-tests, verifies the
+tag matches every package's `version`, publishes the six
+`@think-prompt/*` packages to npm with provenance, and drafts a GitHub
+Release from the matching `CHANGELOG.md` section.
+
+### Steps
+
+```bash
+# 1. Sync all six package.json files to the target SemVer.
+#    (Edits packages/*/package.json only; root stays private.)
+pnpm run release:bump 0.2.0
+
+# 2. Optional sanity check — produces tarballs under ./.dry-publish/ that
+#    mirror what CI would publish. Open a few to confirm dist/ files, types,
+#    and metadata look right before tagging.
+pnpm run release:dry
+
+# 3. Add the new `## [0.2.0] - <date>` section to CHANGELOG.md with a
+#    human-readable summary; the release workflow extracts this section
+#    verbatim into the GitHub Release notes.
+
+# 4. Commit, tag, push.
+git commit -am "release: v0.2.0"
+git tag v0.2.0
+git push origin main --tags
+```
+
+### Prerequisites (one-time, maintainer account)
+
+- `NPM_TOKEN` secret on the repo — an npm automation token with publish
+  rights on the `@think-prompt` org.
+- Repo must allow GitHub Actions to request OIDC tokens (for npm
+  provenance); defaults to allowed on public repos.
+
+### What the workflow guarantees
+
+- Refuses to publish if any `packages/*/package.json` version disagrees
+  with the pushed tag.
+- Re-runs the full CI gate (build → typecheck → lint → test) on the
+  exact tag commit.
+- Signs each tarball with a provenance attestation, so the npm page
+  shows "Built and signed on GitHub Actions" with a link back to the
+  workflow run.
+
+### What the workflow does NOT do
+
+- Bump versions for you — `pnpm run release:bump` is manual so the
+  maintainer eyeballs the diff before tagging.
+- Write CHANGELOG entries — still a human job.
+- Publish prereleases under a non-`latest` tag — if that's needed,
+  extend the workflow with a `--tag` arg driven by the tag name
+  (e.g. `v0.2.0-rc.1` → `--tag next`).
 
 ## Code of Conduct
 
