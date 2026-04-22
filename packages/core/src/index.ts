@@ -8,5 +8,6 @@ export * from './schema.js';
 export * from './db.js';
 export * from './scorer.js';
 export * from './queue.js';
+export * from './backfill.js';
 export * as transcript from './transcript/parser.js';
 export * as llm from './llm/anthropic.js';

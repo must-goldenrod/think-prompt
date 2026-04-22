@@ -4,6 +4,7 @@ import {
   autostartEnableCmd,
   autostartStatusCmd,
 } from './commands/autostart.js';
+import { backfillCmd } from './commands/backfill.js';
 import { coachCmd, configGetCmd, configListCmd, configSetCmd } from './commands/config-cmd.js';
 import { restartCmd, startCmd, statusCmd, stopCmd } from './commands/daemon-cmds.js';
 import { doctorCmd } from './commands/doctor.js';
@@ -85,6 +86,17 @@ program
   .action(exportCmd);
 
 program.command('open').description('open local dashboard in browser').action(openCmd);
+
+program
+  .command('backfill')
+  .description('scan ~/.claude/projects for historical prompts (dry-run only for now)')
+  .option('--dry-run', 'preview counts without importing (default)', true)
+  .option('--execute', 'NOT YET IMPLEMENTED — will import in a follow-up release')
+  .option('--limit <n>', 'scan at most N .jsonl files')
+  .option('--since <date>', 'only consider prompts after this date (YYYY-MM-DD)')
+  .option('--project <substr>', 'filter to project dirs containing this substring')
+  .option('--root <path>', 'override the Claude projects directory')
+  .action(backfillCmd);
 
 const autostart = program
   .command('autostart')
