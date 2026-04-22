@@ -14,12 +14,7 @@
   "bugs": {
     "url": "https://github.com/must-goldenrod/think-prompt/issues"
   },
-  "keywords": [
-    "claude-code",
-    "queue",
-    "background-worker",
-    "local-first"
-  ],
+  "keywords": ["claude-code", "queue", "background-worker", "local-first"],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -32,9 +27,7 @@
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "publishConfig": {
     "access": "public",
     "provenance": true
