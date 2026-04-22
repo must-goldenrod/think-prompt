@@ -1,8 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Think-Prompt for Web",
-  "version": "0.3.0",
-  "description": "Local-first prompt coach for ChatGPT, Claude.ai, Gemini, Perplexity, and Genspark. Your prompts stay on your machine.",
+  "name": "__MSG_extensionName__",
+  "version": "0.3.1",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
+  "minimum_chrome_version": "104",
+  "homepage_url": "https://github.com/must-goldenrod/think-prompt",
   "permissions": ["storage", "alarms"],
   "host_permissions": [
     "https://chatgpt.com/*",

@@ -19,6 +19,8 @@
       .off { background: #ef4444; }
       button { width: 100%; padding: 8px; border: 1px solid #ddd; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; margin-top: 8px; }
       button:hover { background: #f5f5f5; }
+      button.danger { border-color: #fca5a5; color: #b91c1c; }
+      button.danger:hover { background: #fef2f2; }
       .hint { font-size: 11px; color: #888; margin-top: 8px; }
       a { color: #2563eb; text-decoration: none; }
     </style>
@@ -42,6 +44,7 @@
       <span id="poisoned">0</span>
     </div>
     <button id="sync-btn">Sync now</button>
+    <button id="retry-btn" class="danger" style="display:none">Retry stuck</button>
     <button id="options-btn">Settings</button>
     <p class="hint">Your prompts never leave this device. See <a href="../privacy-policy.html" target="_blank">privacy policy</a>.</p>
     <script type="module" src="popup.js"></script>

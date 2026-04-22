@@ -44,14 +44,14 @@ export function classifyEvent(obj: Record<string, unknown>): TranscriptEvent {
       for (const item of c) {
         if (typeof item === 'string') parts.push(item);
         else if (item && typeof item === 'object') {
-          const t = (item as any).text;
+          const t = (item as Record<string, unknown>).text;
           if (typeof t === 'string') parts.push(t);
         }
       }
       return parts.length > 0 ? parts.join('\n') : undefined;
     }
     if (c && typeof c === 'object') {
-      const t = (c as any).text;
+      const t = (c as Record<string, unknown>).text;
       if (typeof t === 'string') return t;
     }
     return undefined;

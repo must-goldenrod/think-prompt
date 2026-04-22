@@ -50,7 +50,7 @@ async function main() {
         continue;
       }
       try {
-        const res = await handler({ db, logger, config }, job.payload as any);
+        const res = await handler({ db, logger, config }, job.payload);
         if (res === 'retry') {
           if (job.attempts + 1 < MAX_ATTEMPTS) {
             requeue(paths.queueFile, job);

@@ -1,11 +1,13 @@
 {
   "name": "@think-prompt/browser-extension",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Think-Prompt browser extension — local-first prompt coach for ChatGPT, Claude, Gemini, and more.",
   "type": "module",
   "private": true,
   "scripts": {
     "build": "node build.mjs",
+    "build:prod": "BUILD_MODE=production node build.mjs",
+    "package": "BUILD_MODE=production node build.mjs && node scripts/package.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test"

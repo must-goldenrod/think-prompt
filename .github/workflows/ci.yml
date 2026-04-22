@@ -32,3 +32,24 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+
+  extension-package:
+    name: Package browser extension (zip)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm -F @think-prompt/browser-extension build:prod
+      - run: pnpm -F @think-prompt/browser-extension package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: think-prompt-extension
+          path: packages/browser-extension/*.zip
+          if-no-files-found: error
+          retention-days: 30

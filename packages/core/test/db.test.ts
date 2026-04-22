@@ -60,7 +60,10 @@ describe('db', () => {
       rules_version: 1,
     });
     endSession(db, 's2');
-    const row = db.prepare(`SELECT * FROM sessions WHERE id=?`).get('s2') as any;
+    const row = db.prepare(`SELECT * FROM sessions WHERE id=?`).get('s2') as {
+      ended_at: string | null;
+      stop_count: number;
+    };
     expect(row.ended_at).toBeTruthy();
     expect(row.stop_count).toBe(1);
     db.close();
@@ -85,7 +88,10 @@ describe('db', () => {
       prompt_text: 'explore this',
       response_text: 'explored',
     });
-    const sub = db.prepare(`SELECT * FROM subagent_invocations WHERE id=?`).get(subId) as any;
+    const sub = db.prepare(`SELECT * FROM subagent_invocations WHERE id=?`).get(subId) as {
+      status: string;
+      prompt_text: string;
+    };
     expect(sub.status).toBe('completed');
     expect(sub.prompt_text).toBe('explore this');
 
@@ -107,7 +113,7 @@ describe('db', () => {
     });
     const roll = db
       .prepare(`SELECT * FROM tool_use_rollups WHERE session_id=? AND tool_name=?`)
-      .get('s3', 'Read') as any;
+      .get('s3', 'Read') as { call_count: number; fail_count: number; total_ms: number };
     expect(roll.call_count).toBe(2);
     expect(roll.fail_count).toBe(1);
     expect(roll.total_ms).toBe(150);

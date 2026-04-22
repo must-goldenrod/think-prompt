@@ -37,10 +37,12 @@ export const HOOK_KEYS = [
  * A hook block in the claude settings.json is "ours" if any of its hooks
  * points at the think-prompt agent URL.
  */
-export function isOurHookBlock(block: any): boolean {
-  if (!block || !Array.isArray(block.hooks)) return false;
-  return block.hooks.some(
-    (h: any) =>
-      typeof h?.url === 'string' && h.url.includes('/v1/hook/') && h.url.includes('127.0.0.1')
-  );
+export function isOurHookBlock(block: unknown): boolean {
+  if (!block || typeof block !== 'object') return false;
+  const hooks = (block as { hooks?: unknown }).hooks;
+  if (!Array.isArray(hooks)) return false;
+  return hooks.some((h) => {
+    const url = (h as { url?: unknown })?.url;
+    return typeof url === 'string' && url.includes('/v1/hook/') && url.includes('127.0.0.1');
+  });
 }

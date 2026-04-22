@@ -378,3 +378,4 @@ Content-Type: application/json
 | 날짜 | 변경 | 작성자 |
 |---|---|---|
 | 2026-04-20 | v0 초안 — 아키텍처·Manifest·사이트 어댑터·롤아웃 단계 | 초기 |
+| 2026-04-22 | v0.3.1 하드닝 — CORS/PNA preflight, SPA 네비 중복 캡처 방지, 컨텍스트 무효화 가드, MAX_PROMPT_CHARS 상한, 메시지 스키마 런타임 검증, sender id 게이트, 민감 필드 skip, drain 재진입 가드, onInstalled 온보딩 탭, `_locales/{en,ko}` 뼈대, manifest `minimum_chrome_version=104` + `homepage_url`, Options "Clear all" + Popup "Retry stuck", 프로덕션 minify 빌드 프로파일, `scripts/package.mjs` → zip, CI `extension-package` 잡 | v0.3.1 |

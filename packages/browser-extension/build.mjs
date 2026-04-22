@@ -3,6 +3,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // Simple esbuild pipeline for the Think-Prompt browser extension.
 // Produces dist/ that can be loaded unpacked in Chrome via chrome://extensions.
+//
+// Profiles:
+//   BUILD_MODE=development (default) — unminified, inline sourcemaps, fast.
+//   BUILD_MODE=production            — minified, linked sourcemaps (smaller
+//                                       zip + better perf; sourcemap still
+//                                       shipped so reviewers can audit).
 import { build } from 'esbuild';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,13 +16,15 @@ const __dirname = dirname(__filename);
 const root = __dirname;
 const dist = join(root, 'dist');
 
+const MODE = process.env.BUILD_MODE === 'production' ? 'production' : 'development';
+
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
 const common = {
   bundle: true,
-  minify: false,
-  sourcemap: true,
+  minify: MODE === 'production',
+  sourcemap: MODE === 'production' ? 'linked' : true,
   target: ['es2022'],
   format: 'esm',
   logLevel: 'info',
@@ -61,13 +69,16 @@ for (const panel of ['popup', 'options']) {
   }
 }
 
-// Copy manifest + icons + privacy policy.
+// Copy manifest + icons + privacy policy + i18n locales.
 cpSync(join(root, 'manifest.json'), join(dist, 'manifest.json'));
 if (existsSync(join(root, 'public/icons'))) {
   cpSync(join(root, 'public/icons'), join(dist, 'icons'), { recursive: true });
 }
 if (existsSync(join(root, 'public/privacy-policy.html'))) {
   cpSync(join(root, 'public/privacy-policy.html'), join(dist, 'privacy-policy.html'));
+}
+if (existsSync(join(root, 'public/_locales'))) {
+  cpSync(join(root, 'public/_locales'), join(dist, '_locales'), { recursive: true });
 }
 
 // Version sync: pull version from package.json into manifest.json.
@@ -81,4 +92,4 @@ try {
   // ignore
 }
 
-console.log('Built extension → dist/');
+console.log(`Built extension (${MODE}) → dist/`);

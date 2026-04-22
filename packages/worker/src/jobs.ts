@@ -429,7 +429,7 @@ export async function handleRewrite(
   }
 }
 
-export type JobHandler = (ctx: JobContext, payload: any) => Promise<'done' | 'retry'>;
+export type JobHandler = (ctx: JobContext, payload: unknown) => Promise<'done' | 'retry'>;
 export const HANDLERS: Record<string, JobHandler> = {
   parse_subagent_transcript: handleParseSubagentTranscript as JobHandler,
   parse_transcript: handleParseTranscript as JobHandler,

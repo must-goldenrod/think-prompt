@@ -7,13 +7,18 @@ export interface MergeResult {
   backupPath?: string | undefined;
 }
 
+type ClaudeSettings = {
+  hooks?: Record<string, HookBlock[] | undefined>;
+  [key: string]: unknown;
+};
+
 export function mergeHooksIntoSettings(settingsPath: string, agentPort: number): MergeResult {
   mkdirSync(dirname(settingsPath), { recursive: true });
-  let obj: any = {};
+  let obj: ClaudeSettings = {};
   if (existsSync(settingsPath)) {
     try {
       const raw = readFileSync(settingsPath, 'utf8');
-      obj = raw.trim().length > 0 ? JSON.parse(raw) : {};
+      obj = (raw.trim().length > 0 ? JSON.parse(raw) : {}) as ClaudeSettings;
     } catch {
       // Back up unreadable settings and start fresh with our hooks block only.
       const backup = `${settingsPath}.unreadable-${Date.now()}.bak`;
@@ -25,7 +30,7 @@ export function mergeHooksIntoSettings(settingsPath: string, agentPort: number):
   if (!obj.hooks || typeof obj.hooks !== 'object') obj.hooks = {};
   const blocks = buildHookBlocks(agentPort);
   for (const key of HOOK_KEYS) {
-    const existingList: HookBlock[] = Array.isArray(obj.hooks[key]) ? obj.hooks[key] : [];
+    const existingList: HookBlock[] = Array.isArray(obj.hooks[key]) ? obj.hooks[key]! : [];
     const filtered = existingList.filter((b) => !isOurHookBlock(b));
     filtered.push(...blocks[key]!);
     obj.hooks[key] = filtered;
@@ -44,18 +49,20 @@ export function mergeHooksIntoSettings(settingsPath: string, agentPort: number):
 
 export function removeHooksFromSettings(settingsPath: string): MergeResult {
   if (!existsSync(settingsPath)) return { changed: false };
-  let obj: any;
+  let obj: ClaudeSettings;
   try {
-    obj = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    obj = JSON.parse(readFileSync(settingsPath, 'utf8')) as ClaudeSettings;
   } catch {
     return { changed: false };
   }
   if (!obj.hooks || typeof obj.hooks !== 'object') return { changed: false };
   const before = JSON.stringify(obj);
   for (const key of HOOK_KEYS) {
-    if (!Array.isArray(obj.hooks[key])) continue;
-    obj.hooks[key] = obj.hooks[key].filter((b: any) => !isOurHookBlock(b));
-    if (obj.hooks[key].length === 0) delete obj.hooks[key];
+    const list = obj.hooks[key];
+    if (!Array.isArray(list)) continue;
+    const filtered = list.filter((b) => !isOurHookBlock(b));
+    if (filtered.length === 0) delete obj.hooks[key];
+    else obj.hooks[key] = filtered;
   }
   if (Object.keys(obj.hooks).length === 0) delete obj.hooks;
   const after = JSON.stringify(obj);

@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "Think-Prompt for Web"
+  },
+  "extensionDescription": {
+    "message": "ChatGPT, Claude.ai, Gemini, Perplexity, Genspark를 위한 로컬 우선 프롬프트 코치. 프롬프트는 내 PC를 벗어나지 않습니다."
+  }
+}
