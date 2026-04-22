@@ -55,52 +55,100 @@ function tryRun(cmd: string, args: string[]): string {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── *
- * POLICY ZONE — fill in the auto-start behaviour you want shipped.
+ * POLICY — decisions finalized in docs/00-decision-log.md D-031.
  *
- * The two functions below are the ONLY meaningful design decision in this
- * file. Everything else (path resolution, file writing, launchctl/systemctl
- * shell-out) is mechanical.
+ *   1. Start on login             — YES (RunAtLoad true / WantedBy=default.target)
+ *   2. Respawn policy             — CRASH-ONLY (respect explicit stop / exit 0)
+ *                                   launchd: KeepAlive.SuccessfulExit=false
+ *                                   systemd: Restart=on-failure
+ *   3. Back-off between restarts  — 10 seconds (ThrottleInterval / RestartSec)
+ *   4. Log destination            — combined stdout+stderr into
+ *                                   <root>/autostart-<role>.log (append)
+ *   5. Working directory + env    — cwd=<root>, minimal PATH for node binary
+ *                                   discovery, NODE_ENV=production
  *
- * Decisions to encode:
- *   1. RunAtLoad / WantedBy=default.target  — start on login?
- *   2. KeepAlive policy:
- *        a) always-on:    `<key>KeepAlive</key><true/>`            (Restart=always)
- *        b) crash-only:   `<key>KeepAlive</key><dict>
- *                            <key>SuccessfulExit</key><false/>
- *                          </dict>`                                 (Restart=on-failure)
- *        c) one-shot:     omit KeepAlive entirely                   (Restart=no)
- *   3. ThrottleInterval / RestartSec — back-off seconds (avoid restart storms)
- *   4. StandardOutPath / StandardErrorPath — combine vs split logs
- *   5. Working directory + minimal EnvironmentVariables (PATH, NODE_ENV)
- *
- * Pick whatever matches the project's UX. The reference plist used by
- * Part A (one-off setup on the maintainer's machine) lives at
- *   ~/Library/LaunchAgents/com.thinkprompt.<role>.plist
- * if you want a starting point.
+ * Rationale: aligns with D-028 (fail-open) — if a daemon dies unexpectedly
+ * we revive it, but we never override a user's explicit stop.
  * ────────────────────────────────────────────────────────────────────────── */
 
-function buildLaunchdPlist(role: Role, nodePath: string, entry: string, root: string): string {
-  // TODO(autostart): return the plist XML. Should be 25-40 lines.
-  // Use the parameters: role (Label suffix), nodePath, entry, root (logs dir).
-  void role;
-  void nodePath;
-  void entry;
-  void root;
-  throw new Error(
-    'autostart: buildLaunchdPlist not yet implemented — see POLICY ZONE comment in autostart.ts'
-  );
+function xmlEscape(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-function buildSystemdUnit(role: Role, nodePath: string, entry: string, root: string): string {
-  // TODO(autostart): return the [Unit]/[Service]/[Install] body.
-  // Mirror buildLaunchdPlist policy choices in systemd syntax.
-  void role;
-  void nodePath;
-  void entry;
-  void root;
-  throw new Error(
-    'autostart: buildSystemdUnit not yet implemented — see POLICY ZONE comment in autostart.ts'
-  );
+export function buildLaunchdPlist(
+  role: Role,
+  nodePath: string,
+  entry: string,
+  root: string
+): string {
+  const logFile = `${root}/autostart-${role}.log`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.thinkprompt.${role}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${xmlEscape(nodePath)}</string>
+    <string>${xmlEscape(entry)}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>WorkingDirectory</key>
+  <string>${xmlEscape(root)}</string>
+  <key>StandardOutPath</key>
+  <string>${xmlEscape(logFile)}</string>
+  <key>StandardErrorPath</key>
+  <string>${xmlEscape(logFile)}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+</dict>
+</plist>
+`;
+}
+
+export function buildSystemdUnit(
+  role: Role,
+  nodePath: string,
+  entry: string,
+  root: string
+): string {
+  const logFile = `${root}/autostart-${role}.log`;
+  return `[Unit]
+Description=think-prompt ${role} daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${nodePath} ${entry}
+WorkingDirectory=${root}
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:${logFile}
+StandardError=append:${logFile}
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
+`;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */

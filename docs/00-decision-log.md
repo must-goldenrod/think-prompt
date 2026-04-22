@@ -159,6 +159,32 @@
 - **결정:** **MVP 미포함**. 크래시/에러 리포트조차 수집하지 않음.
 - **근거:** 로컬 중심 원칙의 결정적 근거. 이후 Opt-in 텔레메트리는 별도 설계로.
 
+## D-031 · autostart 정책 (OS 레벨 자동 시작)
+- **날짜:** 2026-04-22
+- **컨텍스트:** `think-prompt autostart enable` 이 생성하는 launchd(macOS) / systemd --user(Linux) 유닛 파일의 5가지 세부 정책을 확정해야 한다. 이전 스캐폴딩 커밋(`6913612`)은 POLICY ZONE 주석으로 결정을 유예했었다.
+- **대안:**
+  - ① **always-on** — KeepAlive true / Restart=always. 항상 켜져 있게.
+  - ② **crash-only** — KeepAlive.SuccessfulExit=false / Restart=on-failure. 정상 종료는 존중, 비정상 종료만 부활.
+  - ③ **manual** — 부팅 시 자동 시작 없음. 유저가 명시적으로 load/start 해야 함.
+- **결정:** **② crash-only** 를 채택. 구체 파라미터:
+  1. 로그인 시 자동 실행: **YES** (`RunAtLoad=true` / `WantedBy=default.target`)
+  2. 재시작 정책: **crash-only** (launchd `KeepAlive.SuccessfulExit=false`, systemd `Restart=on-failure`)
+  3. 백오프: **10초** (`ThrottleInterval=10` / `RestartSec=10`)
+  4. 로그: stdout + stderr 를 합쳐 `~/.think-prompt/autostart-<role>.log` 에 append (기존 `agent.log`/`worker.log` 와 충돌 회피)
+  5. 작업 디렉토리 & 환경변수: cwd = `~/.think-prompt`, `PATH`는 시스템 기본 bin 경로 + macOS `/opt/homebrew/bin`, `NODE_ENV=production`
+- **근거:**
+  - **D-028(fail-open)과 정합.** 예기치 않은 크래시는 자동 복구하되, 유저가 `think-prompt stop` 하거나 `launchctl unload` 한 것은 **유저 의도**로 존중.
+  - always-on은 버그로 프로세스가 즉시 죽는 경우 **restart storm** 위험(특히 launchd는 ThrottleInterval 없으면 1초 내 재시작). 10초 백오프로 방지.
+  - manual은 편의성 손실이 커서 "auto-start" 기능의 목적을 해친다.
+  - 로그를 별도 파일에 두는 이유: pino가 쓰는 구조화 JSON 로그와 OS 매니저가 캡처하는 stdout/stderr(시작 실패 시 주로 찍힘)를 섞으면 디버깅이 어려워짐.
+- **영향:**
+  - `packages/cli/src/commands/autostart.ts` 의 `buildLaunchdPlist` / `buildSystemdUnit` 두 함수에 정책을 구체화. export로 변경(테스트 목적).
+  - `packages/cli/test/autostart.test.ts` 신규 — 유닛 파일 문자열에 대한 단언(Label/ProgramArguments/KeepAlive/ThrottleInterval/StandardOutPath/EnvironmentVariables 등).
+  - `think-prompt autostart enable` 이 실제로 동작 가능한 상태가 됨. 이전까지는 POLICY ZONE throw 스텁이었음.
+- **열린 항목:**
+  - Windows 지원 시점에 동등한 Task Scheduler 정책을 어떻게 표현할지는 별도 결정으로(D-024 Phase 2에 종속).
+  - autostart 로그 파일 로테이션: 현재 무제한 append. 90일 retention 정책(D-004 privacy 90일) 과 충돌 가능 — 추후 D-번호로 후속 검토.
+
 ---
 
 ## 열린 결정(추후)
