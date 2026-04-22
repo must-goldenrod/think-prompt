@@ -116,16 +116,70 @@ export async function pendingRows(limit = 50): Promise<QueueRow[]> {
   const db = await open();
   return await new Promise<QueueRow[]>((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
+    // IDBKeyRange.only requires IDBValidKey; booleans are rejected by the
+    // type-check even though IndexedDB accepts them at runtime as the index
+    // key value. Cast through unknown to satisfy DOM types without `any`.
     const req = tx
       .objectStore(STORE)
       .index('synced')
-      .getAll(IDBKeyRange.only(false as any));
+      .getAll(IDBKeyRange.only(false as unknown as IDBValidKey));
     req.onsuccess = () => {
       const rows = (req.result as QueueRow[]).filter(isRowRetriable).slice(0, limit);
       resolve(rows);
     };
     req.onerror = () => reject(req.error);
     tx.oncomplete = () => db.close();
+  });
+}
+
+/**
+ * Reset the `poisoned` flag on every row that has it set so the next
+ * drainPending() picks them up again. Returns the count of rows reset.
+ */
+export async function unpoisonAll(): Promise<number> {
+  const db = await open();
+  return await new Promise<number>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const req = store.getAll();
+    let reset = 0;
+    req.onsuccess = () => {
+      const rows = req.result as QueueRow[];
+      for (const r of rows) {
+        if (r.poisoned) {
+          r.poisoned = false;
+          r.attempts = 0;
+          delete r.last_error;
+          store.put(r);
+          reset++;
+        }
+      }
+    };
+    tx.oncomplete = () => {
+      db.close();
+      resolve(reset);
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * Wipe every row from the queue. Invoked when the user clicks
+ * "Clear all captured prompts" in Options. Does not touch the
+ * local agent's SQLite — that's a separate concern (CLI `wipe`).
+ */
+export async function clearAll(): Promise<number> {
+  const db = await open();
+  return await new Promise<number>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const count = store.count();
+    store.clear();
+    tx.oncomplete = () => {
+      db.close();
+      resolve(count.result as number);
+    };
+    tx.onerror = () => reject(tx.error);
   });
 }
 

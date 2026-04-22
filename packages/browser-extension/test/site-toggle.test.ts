@@ -8,15 +8,26 @@ import { __resetToggleCacheForTests, isSiteEnabled } from '../src/background/sit
 
 const STORAGE_KEY = 'think-prompt:sites';
 
+interface ChromeStorageStub {
+  storage: {
+    local: { get: ReturnType<typeof vi.fn> };
+    onChanged: { addListener: ReturnType<typeof vi.fn> };
+  };
+}
+
+function setChromeStub(stub: ChromeStorageStub): void {
+  (globalThis as unknown as { chrome: ChromeStorageStub }).chrome = stub;
+}
+
 function stubStorage(value: unknown): void {
-  (globalThis as any).chrome = {
+  setChromeStub({
     storage: {
       local: {
         get: vi.fn(async (key: string) => ({ [key]: value })),
       },
       onChanged: { addListener: vi.fn() },
     },
-  };
+  });
 }
 
 beforeEach(() => {
@@ -40,7 +51,7 @@ describe('site toggle', () => {
   });
 
   it('returns true when storage access throws', async () => {
-    (globalThis as any).chrome = {
+    setChromeStub({
       storage: {
         local: {
           get: vi.fn(async () => {
@@ -49,7 +60,7 @@ describe('site toggle', () => {
         },
         onChanged: { addListener: vi.fn() },
       },
-    };
+    });
     await expect(isSiteEnabled('perplexity')).resolves.toBe(true);
   });
 
@@ -58,7 +69,8 @@ describe('site toggle', () => {
     await isSiteEnabled('chatgpt');
     await isSiteEnabled('chatgpt');
     await isSiteEnabled('claude-ai');
-    const getMock = (globalThis as any).chrome.storage.local.get as ReturnType<typeof vi.fn>;
+    const getMock = (globalThis as unknown as { chrome: ChromeStorageStub }).chrome.storage.local
+      .get as ReturnType<typeof vi.fn>;
     expect(getMock).toHaveBeenCalledTimes(1);
   });
 });

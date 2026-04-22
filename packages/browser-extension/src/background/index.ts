@@ -11,11 +11,21 @@
  *    sees feedback without opening the popup.
  *  - Use chrome.alarms (not setInterval) to drain the queue — MV3 service
  *    workers die after ~30s idle and setInterval stops firing.
+ *  - Reject messages from other extensions and from malformed payloads.
+ *  - Open the Options page on first install (onboarding).
  */
 import { maskPii } from '../shared/pii.js';
-import type { CapturedPrompt, IngestResult, Message } from '../shared/types.js';
+import { type CapturedPrompt, type IngestResult, isValidMessage } from '../shared/types.js';
 import { agentReachable, sendIngest } from './agent-client.js';
-import { enqueue, markError, markSynced, pendingRows, stats } from './queue.js';
+import {
+  clearAll,
+  enqueue,
+  markError,
+  markSynced,
+  pendingRows,
+  stats,
+  unpoisonAll,
+} from './queue.js';
 import { installToggleSubscription, isSiteEnabled } from './site-toggle.js';
 
 const DRAIN_ALARM = 'think-prompt-drain';
@@ -101,25 +111,38 @@ async function handlePrompt(p: CapturedPrompt, tabId?: number): Promise<IngestRe
   }
 }
 
+// Guards against overlapping drains fired by alarm + popup button + new
+// prompt arrivals. Without this the same queue row can be sent twice.
+let draining = false;
 async function drainPending(): Promise<number> {
-  if (!(await agentReachable())) return 0;
-  const rows = await pendingRows();
-  let ok = 0;
-  for (const row of rows) {
-    try {
-      await sendIngest(row);
-      await markSynced(row.id);
-      ok++;
-    } catch (err) {
-      await markError(row.id, (err as Error).message);
+  if (draining) return 0;
+  draining = true;
+  try {
+    if (!(await agentReachable())) return 0;
+    const rows = await pendingRows();
+    let ok = 0;
+    for (const row of rows) {
+      try {
+        await sendIngest(row);
+        await markSynced(row.id);
+        ok++;
+      } catch (err) {
+        await markError(row.id, (err as Error).message);
+      }
     }
+    return ok;
+  } finally {
+    draining = false;
   }
-  return ok;
 }
 
 // --- Message routing ----------------------------------------------------
 
-chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
+  // Hard gate: only messages from this extension's own surfaces are allowed.
+  if (sender.id && sender.id !== chrome.runtime.id) return false;
+  if (!isValidMessage(raw)) return false;
+  const msg = raw;
   const tabId = sender.tab?.id;
 
   if (msg.kind === 'prompt') {
@@ -153,13 +176,36 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.kind === 'retry-poisoned') {
+    unpoisonAll()
+      .then((n) => drainPending().then((d) => sendResponse({ reset: n, synced: d })))
+      .catch((err) => sendResponse({ ok: false, error: (err as Error).message }));
+    return true;
+  }
+
+  if (msg.kind === 'clear-all') {
+    clearAll()
+      .then((n) => sendResponse({ cleared: n }))
+      .catch((err) => sendResponse({ ok: false, error: (err as Error).message }));
+    return true;
+  }
+
   return false;
 });
 
 // --- Periodic drain (MV3-safe) -----------------------------------------
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create(DRAIN_ALARM, { periodInMinutes: 1 });
+  // First-install onboarding: open the Options page so the user sees the
+  // privacy statement and per-site toggles before anything is captured.
+  if (details.reason === 'install') {
+    try {
+      chrome.tabs?.create?.({ url: chrome.runtime.getURL('options/index.html') });
+    } catch {
+      // tabs API unavailable under test
+    }
+  }
 });
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(DRAIN_ALARM, { periodInMinutes: 1 });

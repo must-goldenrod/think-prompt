@@ -56,3 +56,11 @@ function render(state: Record<string, boolean>): void {
 }
 
 load().then(render);
+
+document.getElementById('clear-btn')?.addEventListener('click', () => {
+  if (!confirm('Delete every captured prompt from this browser? This cannot be undone.')) return;
+  chrome.runtime.sendMessage({ kind: 'clear-all' }, (res: { cleared?: number } | undefined) => {
+    const out = document.getElementById('clear-result');
+    if (out) out.textContent = `Cleared ${res?.cleared ?? 0} row(s).`;
+  });
+});

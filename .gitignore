@@ -11,3 +11,4 @@ coverage/
 *.tsbuildinfo
 .turbo/
 .tmp/
+packages/browser-extension/*.zip

@@ -119,14 +119,20 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
            LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
           ORDER BY pu.created_at DESC LIMIT 8`
       )
-      .all() as any[];
+      .all() as Array<{
+      id: string;
+      snippet: string;
+      created_at: string;
+      score: number;
+      tier: string;
+    }>;
     const worst = db
       .prepare(
         `SELECT pu.id, substr(pu.prompt_text,1,120) AS snippet, qs.final_score, qs.tier
            FROM prompt_usages pu JOIN quality_scores qs ON qs.usage_id = pu.id
           ORDER BY qs.final_score ASC LIMIT 5`
       )
-      .all() as any[];
+      .all() as Array<{ id: string; snippet: string; final_score: number; tier: string }>;
 
     const tierHtml = tierCounts
       .map(
@@ -221,12 +227,12 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
   });
 
   fastify.get('/prompts', async (req, reply) => {
-    const q = (req.query as any) ?? {};
+    const q = (req.query ?? {}) as Record<string, unknown>;
     const tierFilter = typeof q.tier === 'string' ? q.tier : undefined;
     const ruleFilter = typeof q.rule === 'string' ? q.rule : undefined;
     const sourceFilter = typeof q.source === 'string' && q.source ? q.source : undefined;
     const wheres: string[] = [];
-    const args: any[] = [];
+    const args: (string | number | null)[] = [];
     if (tierFilter) {
       wheres.push('qs.tier = ?');
       args.push(tierFilter);
@@ -328,18 +334,42 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
   fastify.get('/prompts/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const u = db.prepare(`SELECT * FROM prompt_usages WHERE id=?`).get(id) as any;
+    const u = db.prepare(`SELECT * FROM prompt_usages WHERE id=?`).get(id) as
+      | {
+          id: string;
+          session_id: string;
+          prompt_text: string;
+          char_len: number;
+          word_count: number;
+          turn_index: number;
+          created_at: string;
+          detected_language: string | null;
+        }
+      | undefined;
     if (!u) {
       reply.code(404).type('text/html').send(layout('Not found', '<p>Not found</p>'));
       return;
     }
-    const score = db.prepare(`SELECT * FROM quality_scores WHERE usage_id=?`).get(id) as any;
+    const score = db.prepare(`SELECT * FROM quality_scores WHERE usage_id=?`).get(id) as
+      | {
+          rule_score: number;
+          usage_score: number | null;
+          judge_score: number | null;
+          final_score: number;
+          tier: string;
+        }
+      | undefined;
     const hits = db
       .prepare(`SELECT * FROM rule_hits WHERE usage_id=? ORDER BY severity DESC`)
-      .all(id) as any[];
+      .all(id) as Array<{ rule_id: string; severity: number; message: string }>;
     const rewrites = db
       .prepare(`SELECT * FROM rewrites WHERE usage_id=? ORDER BY created_at DESC`)
-      .all(id) as any[];
+      .all(id) as Array<{
+      status: string;
+      created_at: string;
+      after_text: string;
+      reason: string | null;
+    }>;
     const fb = getOutcomeTotals(db, id);
     const lang = u.detected_language ?? '?';
 
@@ -429,7 +459,9 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
   fastify.get('/sessions/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const session = db.prepare(`SELECT * FROM sessions WHERE id=?`).get(id) as any;
+    const session = db.prepare(`SELECT * FROM sessions WHERE id=?`).get(id) as
+      | { cwd: string; model: string | null; started_at: string }
+      | undefined;
     if (!session) {
       reply.code(404).type('text/html').send(layout('Not found', '<p>Not found</p>'));
       return;
@@ -441,15 +473,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
            FROM prompt_usages pu LEFT JOIN quality_scores qs ON qs.usage_id=pu.id
           WHERE pu.session_id=? ORDER BY pu.turn_index ASC`
       )
-      .all(id) as any[];
+      .all(id) as Array<{
+      id: string;
+      snippet: string;
+      turn_index: number;
+      created_at: string;
+      score: number;
+      tier: string;
+    }>;
     const subs = db
       .prepare(`SELECT * FROM subagent_invocations WHERE session_id=? ORDER BY started_at ASC`)
-      .all(id) as any[];
+      .all(id) as Array<{
+      agent_type: string;
+      agent_id: string;
+      status: string;
+      prompt_text: string | null;
+    }>;
     const tools = db
       .prepare(
         `SELECT tool_name, call_count, fail_count, total_ms FROM tool_use_rollups WHERE session_id=? ORDER BY call_count DESC`
       )
-      .all(id) as any[];
+      .all(id) as Array<{
+      tool_name: string;
+      call_count: number;
+      fail_count: number;
+      total_ms: number;
+    }>;
     const body = `
       <h1 class="text-2xl font-bold mb-2">Session ${escapeHtml(id.slice(-8))}</h1>
       <div class="text-xs text-gray-500 mb-4">
@@ -571,7 +620,13 @@ think-prompt coach on</pre>
            (SELECT COUNT(*) FROM rule_hits) AS hits,
            (SELECT COUNT(*) FROM rewrites) AS rewrites`
       )
-      .get() as any;
+      .get() as {
+      usages: number;
+      sessions: number;
+      scores: number;
+      hits: number;
+      rewrites: number;
+    };
     const body = `
       <h1 class="text-2xl font-bold mb-4">Doctor</h1>
       <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4 mb-4">

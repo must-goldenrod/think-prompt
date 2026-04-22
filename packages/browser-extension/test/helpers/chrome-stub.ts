@@ -23,6 +23,13 @@ type SendMessageMock = Mock<(msg: AdapterMessage, cb?: SendMessageCallback) => v
 
 interface ChromeStub {
   runtime: {
+    /**
+     * Content scripts treat a missing `chrome.runtime.id` as "extension
+     * context invalidated" (happens after reload/update) and skip all
+     * sendMessage calls. Tests need a string id so that guard passes.
+     */
+    id: string;
+    lastError?: { message: string };
     sendMessage: SendMessageMock;
   };
 }
@@ -36,7 +43,7 @@ export function setupChromeStub(pathname = '/test'): SendMessageMock {
   const sendMessage: SendMessageMock = vi.fn((_msg: AdapterMessage, cb?: SendMessageCallback) =>
     cb?.({ ok: true })
   );
-  const stub: ChromeStub = { runtime: { sendMessage } };
+  const stub: ChromeStub = { runtime: { id: 'test-extension-id', sendMessage } };
   // Cast through `unknown` keeps the assignment local to this helper without
   // declaring a global `var chrome: any` that would shadow @types/chrome.
   (globalThis as unknown as { chrome: ChromeStub }).chrome = stub;

@@ -251,4 +251,44 @@ describe('agent server', () => {
     expect(body.ok).toBe(false);
     await app.close();
   });
+
+  it('/v1/ingest/web OPTIONS preflight responds 204 with CORS + PNA headers', async () => {
+    const app = buildAgentServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/ingest/web',
+      headers: {
+        origin: 'chrome-extension://abcdef',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type, x-think-prompt-ext',
+      },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(res.headers['access-control-allow-origin']).toBe('chrome-extension://abcdef');
+    expect(res.headers['access-control-allow-methods']).toContain('POST');
+    expect(res.headers['access-control-allow-headers']).toContain('x-think-prompt-ext');
+    expect(res.headers['access-control-allow-private-network']).toBe('true');
+    await app.close();
+  });
+
+  it('/v1/ingest/web POST response carries CORS headers for the browser client', async () => {
+    const app = buildAgentServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/ingest/web',
+      headers: {
+        'x-think-prompt-ext': '1',
+        origin: 'chrome-extension://abcdef',
+      },
+      payload: {
+        source: 'chatgpt',
+        browser_session_id: 'cors-check',
+        prompt_text: 'please refactor this',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBe('chrome-extension://abcdef');
+    expect(res.headers['access-control-allow-private-network']).toBe('true');
+    await app.close();
+  });
 });
