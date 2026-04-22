@@ -163,6 +163,87 @@ describe('dashboard', () => {
   });
 });
 
+describe('dashboard period selector (?days=)', () => {
+  it('defaults to 30 days when ?days= is missing', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.statusCode).toBe(200);
+    // The 30d pill should be the one marked active (blue bg), 7d should be inactive.
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/);
+    expect(res.body).not.toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/);
+    await app.close();
+  });
+
+  it('honours ?days=7 by marking the 7d pill active', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en&days=7' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/);
+    await app.close();
+  });
+
+  it('accepts ?days=90 as a valid window', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en&days=90' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=90"[^>]*bg-blue-600[^>]*>90d<\/a>/);
+    await app.close();
+  });
+
+  it('accepts ?days=365 as a valid window', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en&days=365' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=365"[^>]*bg-blue-600[^>]*>365d<\/a>/);
+    await app.close();
+  });
+
+  it('accepts ?days=all and caps the window to available data', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-all', cwd: '/tmp' });
+    insertPromptUsage(db, { session_id: 's-all', prompt_text: 'ancient' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en&days=all' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=all"[^>]*bg-blue-600[^>]*>all<\/a>/);
+    await app.close();
+  });
+
+  it('falls back to 30 days when ?days= is garbage', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/?lang=en&days=not-a-number',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/);
+    await app.close();
+  });
+
+  it('renders all six period options', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('>7d<');
+    expect(res.body).toContain('>14d<');
+    expect(res.body).toContain('>30d<');
+    expect(res.body).toContain('>90d<');
+    expect(res.body).toContain('>365d<');
+    expect(res.body).toContain('>all<');
+    await app.close();
+  });
+
+  it('translates the "all" pill in Korean', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=ko&days=all' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('>전체<');
+    await app.close();
+  });
+});
+
 describe('dashboard i18n', () => {
   it('serves Korean chrome when ?lang=ko', async () => {
     const app = buildDashboardServer({ rootOverride: tmp });

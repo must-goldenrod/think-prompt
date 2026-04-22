@@ -102,8 +102,34 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     }));
     const tierTotal = tierCounts.reduce((acc, r) => acc + r.c, 0);
 
-    // Daily tier breakdown for the last N days.
-    const DAYS = 14;
+    // Daily tier breakdown — window size driven by ?days=.
+    // Accepted: 7, 14, 30, 90, 365, "all". Default 30. Anything else -> 30.
+    // "all" walks back to the earliest prompt (capped at 730 days to keep
+    // the chart SVG from getting absurdly wide on very old installs).
+    const daysParam = (() => {
+      const q = (req.query as Record<string, unknown> | null | undefined) ?? {};
+      const raw = typeof q.days === 'string' ? q.days.toLowerCase() : undefined;
+      if (raw === 'all') return 'all' as const;
+      const n = raw ? Number.parseInt(raw, 10) : Number.NaN;
+      return [7, 14, 30, 90, 365].includes(n) ? n : 30;
+    })();
+
+    // Resolve the actual window length in days.
+    let DAYS: number;
+    if (daysParam === 'all') {
+      const earliest = db.prepare(`SELECT DATE(MIN(created_at)) AS d FROM prompt_usages`).get() as {
+        d: string | null;
+      };
+      if (earliest?.d) {
+        const ms = Date.now() - new Date(`${earliest.d}T00:00:00Z`).getTime();
+        DAYS = Math.min(730, Math.max(1, Math.ceil(ms / 86400000) + 1));
+      } else {
+        DAYS = 14; // No data — show an empty 14-day frame.
+      }
+    } else {
+      DAYS = daysParam;
+    }
+
     const dailyRows = db
       .prepare(
         `SELECT DATE(pu.created_at) AS day,
@@ -150,6 +176,26 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       days.push(row);
     }
     const windowTotal = days.reduce((a, d) => a + d.total, 0);
+
+    // Period selector options for the header pill bar.
+    const PERIOD_OPTIONS: Array<{ value: string; label: string }> = [
+      { value: '7', label: '7d' },
+      { value: '14', label: '14d' },
+      { value: '30', label: '30d' },
+      { value: '90', label: '90d' },
+      { value: '365', label: '365d' },
+      { value: 'all', label: t(locale, 'common.all') },
+    ];
+    const selectedPeriod = daysParam === 'all' ? 'all' : String(daysParam);
+    const periodHtml = PERIOD_OPTIONS.map(({ value, label }) => {
+      const href = `/?lang=${locale}&days=${encodeURIComponent(value)}`;
+      const active = value === selectedPeriod;
+      const base = 'px-2 py-1 text-xs rounded border transition-colors';
+      const activeCls = 'bg-blue-600 text-white border-blue-600';
+      const inactiveCls =
+        'bg-white dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 border-gray-300 dark:border-zinc-600 hover:bg-gray-100 dark:hover:bg-zinc-700';
+      return `<a href="${href}" class="${base} ${active ? activeCls : inactiveCls}">${escapeHtml(label)}</a>`;
+    }).join('');
 
     const recent = db
       .prepare(
@@ -202,9 +248,12 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </div>
 
       <section class="mb-8">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 class="text-lg font-bold">${escapeHtml(t(locale, 'overview.daily_additions', { n: DAYS }))}</h2>
-          <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'common.total'))} <span class="font-mono">${windowTotal}</span></div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="flex items-center gap-1">${periodHtml}</div>
+            <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'common.total'))} <span class="font-mono">${windowTotal}</span></div>
+          </div>
         </div>
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
           ${chartHtml}
