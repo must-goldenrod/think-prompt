@@ -1,23 +1,14 @@
 /**
  * jsdom smoke test for the Claude.ai adapter.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { findPromptMessage, setupChromeStub } from './helpers/chrome-stub.js';
+
+let sendMessage: ReturnType<typeof setupChromeStub>;
 
 beforeEach(() => {
   document.body.replaceChildren();
-  (globalThis as any).chrome = {
-    runtime: {
-      sendMessage: vi.fn((_msg: unknown, cb?: (r: unknown) => void) => cb?.({ ok: true })),
-    },
-  };
-  Object.defineProperty(window, 'performance', {
-    value: { timeOrigin: 1111 },
-    configurable: true,
-  });
-  Object.defineProperty(window, 'location', {
-    value: { pathname: '/chat/session-claude-42' },
-    writable: true,
-  });
+  sendMessage = setupChromeStub('/chat/session-claude-42');
 });
 
 describe('claude-ai adapter', () => {
@@ -37,12 +28,10 @@ describe('claude-ai adapter', () => {
 
     btn.click();
 
-    const sendMessage = (globalThis as any).chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
-    const promptCall = sendMessage.mock.calls.find((c) => (c[0] as any)?.kind === 'prompt');
-    expect(promptCall).toBeDefined();
-    const msg = promptCall![0] as any;
-    expect(msg.payload.source).toBe('claude-ai');
-    expect(msg.payload.prompt_text).toBe('이 PR 리뷰해줘');
-    expect(msg.payload.browser_session_id).toBe('session-claude-42');
+    const msg = findPromptMessage(sendMessage);
+    expect(msg).toBeDefined();
+    expect(msg!.payload.source).toBe('claude-ai');
+    expect(msg!.payload.prompt_text).toBe('이 PR 리뷰해줘');
+    expect(msg!.payload.browser_session_id).toBe('session-claude-42');
   });
 });

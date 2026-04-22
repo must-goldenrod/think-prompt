@@ -55,8 +55,10 @@ Found 0 errors · 56 warnings (대부분 `any` 사용 — I2 cleanup 진행 중)
 
 **최근 안정화 (2026-04-22):**
 - B1: `jsdom`이 워크스페이스 루트 devDeps에 누락돼 `pnpm test`가 무너졌던 것 수정 (`pnpm add -Dw jsdom @types/jsdom`)
-- B2: `parse_subagent_transcript` job이 transcript 미존재 시 4회 retry 후 DLQ로 흘러가던 흐름을 1회 시도 후 `done`+drop로 변경. DLQ 노이즈 28건 → 0건 예상
+- B2: `parse_subagent_transcript` job이 transcript 미존재 시 4회 retry 후 DLQ로 흘러가던 흐름을 1회 시도 후 `done`+drop로 변경. DLQ 노이즈 28건 → 0건 검증됨
 - B3: agent `subagent-stop`이 `subagent-start` 누락 케이스에서 SQLITE_CONSTRAINT_FOREIGNKEY로 실패하던 것 수정 — `upsertSession` 방어 호출 추가
+- B4 (PR#15 후속): B2와 동일 핸들러에서 transcript 파싱·DB 쓰기 실패도 영구실패로 분류하도록 `try/catch` 보강 (handler 안에서 throw → worker main loop catch → retry → DLQ 흐름 차단). launchd가 worker를 자동 재시작하지 않으므로 hot-fix 적용 시 `launchctl kickstart -k`로 재로딩 필요한 점도 학습됨
+- I2 (확장): `noExplicitAny` 정리. PR #15 후 59건이었던 lint warnings를 helper 추출(공유 chrome-stub) + 핵심 row interface 적용으로 29건까지 축소. 잔여는 외부 API 한계 영역(IDB / Claude settings JSON / pino transport chunk 등)
 
 ---
 

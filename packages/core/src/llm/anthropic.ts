@@ -28,8 +28,28 @@ export interface AnthropicResponse {
   stop_reason?: string;
 }
 
+type SystemBlock = string | Array<{ type: 'text'; text: string; cache_control?: { type: string } }>;
+
+interface RequestBody {
+  model: string;
+  max_tokens: number;
+  system: SystemBlock;
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+}
+
+interface ContentBlock {
+  type?: string;
+  text?: string;
+}
+
+interface RawAnthropicResponse {
+  content?: ContentBlock[];
+  usage?: AnthropicResponse['usage'];
+  stop_reason?: string;
+}
+
 export async function anthropicMessage(args: AnthropicCreateArgs): Promise<AnthropicResponse> {
-  const body: any = {
+  const body: RequestBody = {
     model: args.model,
     max_tokens: args.maxTokens ?? 1024,
     system: args.cacheSystem
@@ -50,16 +70,17 @@ export async function anthropicMessage(args: AnthropicCreateArgs): Promise<Anthr
     const msg = await res.text();
     throw new Error(`Anthropic API ${res.status}: ${msg.slice(0, 500)}`);
   }
-  const data = (await res.json()) as any;
+  const data = (await res.json()) as RawAnthropicResponse;
   const text =
     Array.isArray(data.content) && data.content[0] && typeof data.content[0].text === 'string'
-      ? data.content.map((c: any) => c.text ?? '').join('')
+      ? data.content.map((c) => c.text ?? '').join('')
       : '';
-  return {
+  const result: AnthropicResponse = {
     text,
     usage: data.usage ?? { input_tokens: 0, output_tokens: 0 },
-    stop_reason: data.stop_reason,
   };
+  if (data.stop_reason !== undefined) result.stop_reason = data.stop_reason;
+  return result;
 }
 
 export function parseStrictJson<T = unknown>(text: string): T | null {

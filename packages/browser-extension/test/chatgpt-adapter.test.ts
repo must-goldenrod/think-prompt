@@ -2,26 +2,16 @@
  * jsdom-based smoke test for the ChatGPT content-script adapter.
  * We set up a minimal DOM that resembles chatgpt.com (`#prompt-textarea` +
  * send button), then trigger a send and assert our adapter captures the
- * right text. `chrome.runtime.sendMessage` is stubbed to a vi.fn().
+ * right text.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { findPromptMessage, setupChromeStub } from './helpers/chrome-stub.js';
+
+let sendMessage: ReturnType<typeof setupChromeStub>;
 
 beforeEach(() => {
-  document.body.innerHTML = '';
-  (globalThis as any).chrome = {
-    runtime: {
-      sendMessage: vi.fn((_msg: unknown, cb?: (r: unknown) => void) => cb?.({ ok: true })),
-    },
-  };
-  Object.defineProperty(window, 'performance', {
-    value: { timeOrigin: 1234567890 },
-    configurable: true,
-  });
-  // jsdom default location is about:blank
-  Object.defineProperty(window, 'location', {
-    value: { pathname: '/c/test-session-abc' },
-    writable: true,
-  });
+  document.body.replaceChildren();
+  sendMessage = setupChromeStub('/c/test-session-abc');
 });
 
 describe('chatgpt adapter', () => {
@@ -41,13 +31,11 @@ describe('chatgpt adapter', () => {
 
     btn.click();
 
-    const sendMessage = (globalThis as any).chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
     expect(sendMessage).toHaveBeenCalled();
-    const promptCall = sendMessage.mock.calls.find((c) => (c[0] as any)?.kind === 'prompt');
-    expect(promptCall).toBeDefined();
-    const msg = promptCall![0] as any;
-    expect(msg.payload.source).toBe('chatgpt');
-    expect(msg.payload.prompt_text).toBe('이 코드 좀 봐줘');
-    expect(msg.payload.browser_session_id).toBe('test-session-abc');
+    const msg = findPromptMessage(sendMessage);
+    expect(msg).toBeDefined();
+    expect(msg!.payload.source).toBe('chatgpt');
+    expect(msg!.payload.prompt_text).toBe('이 코드 좀 봐줘');
+    expect(msg!.payload.browser_session_id).toBe('test-session-abc');
   });
 });

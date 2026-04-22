@@ -38,6 +38,38 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
   const fastify = Fastify({ logger: false, bodyLimit: config.agent.max_prompt_bytes + 16 * 1024 });
   const db = openDb(deps.rootOverride);
 
+  // ---------------------------------------------------------------------
+  // CORS / Private Network Access for the browser-extension endpoint.
+  //
+  // The extension runs under `chrome-extension://<id>` and POSTs with a
+  // custom `X-Think-Prompt-Ext` header. Browsers treat that as a
+  // non-simple cross-origin request, so they send a preflight OPTIONS.
+  // Chrome 104+ also requires `Access-Control-Allow-Private-Network: true`
+  // when the origin is public-facing and the target is loopback.
+  //
+  // fastify.inject() bypasses this path (that's why the unit tests were
+  // green without any CORS handling) — but a real browser WILL fail without
+  // these headers. See docs/09-browser-extension-design.md §7.3.
+  // ---------------------------------------------------------------------
+  fastify.addHook('onSend', async (req, reply, payload) => {
+    if (!req.url.startsWith('/v1/ingest/web')) return payload;
+    const origin = (req.headers.origin as string | undefined) ?? '*';
+    reply.header('access-control-allow-origin', origin);
+    reply.header('access-control-allow-methods', 'POST, OPTIONS');
+    reply.header('access-control-allow-headers', 'content-type, x-think-prompt-ext');
+    reply.header('access-control-allow-private-network', 'true');
+    reply.header('vary', 'origin');
+    return payload;
+  });
+
+  fastify.route({
+    method: 'OPTIONS',
+    url: '/v1/ingest/web',
+    handler: async (_req, reply) => {
+      reply.code(204).send();
+    },
+  });
+
   fastify.get('/health', async () => ({
     ok: true,
     pid: process.pid,

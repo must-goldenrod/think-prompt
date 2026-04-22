@@ -75,12 +75,19 @@ export function saveConfig(cfg: Config, rootOverride?: string): void {
  */
 export function setConfigValue(cfg: Config, key: string, value: unknown): Config {
   const parts = key.split('.');
-  const obj: any = structuredClone(cfg);
-  let node: any = obj;
+  type MutableNode = Record<string, unknown>;
+  const obj = structuredClone(cfg) as unknown as MutableNode;
+  let node: MutableNode = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const p = parts[i]!;
-    if (node[p] == null || typeof node[p] !== 'object') node[p] = {};
-    node = node[p];
+    const next = node[p];
+    if (next == null || typeof next !== 'object') {
+      const fresh: MutableNode = {};
+      node[p] = fresh;
+      node = fresh;
+    } else {
+      node = next as MutableNode;
+    }
   }
   node[parts.at(-1)!] = value;
   return ConfigSchema.parse(obj);
