@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('dashboard', () => {
-  it('renders overview with data', async () => {
+  it('renders overview with data (English locale)', async () => {
     const db = openDb();
     upsertSession(db, { id: 's1', cwd: '/tmp' });
     const u = insertPromptUsage(db, { session_id: 's1', prompt_text: 'hello world' });
@@ -33,10 +33,13 @@ describe('dashboard', () => {
     db.close();
 
     const app = buildDashboardServer({ rootOverride: tmp });
-    const res = await app.inject({ method: 'GET', url: '/' });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Overview');
     expect(res.body).toContain('Total prompts');
+    // Live-refresh bootstrap is injected on the overview.
+    expect(res.body).toContain('data-latest-id');
+    expect(res.body).toContain('/api/overview/latest-id');
     await app.close();
   });
 
@@ -54,24 +57,23 @@ describe('dashboard', () => {
     db.close();
 
     const app = buildDashboardServer({ rootOverride: tmp });
-    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}` });
+    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Prompt');
     expect(res.body).toContain('fix');
     await app.close();
   });
 
-  it('renders rules catalog', async () => {
+  it('renders rules catalog (English)', async () => {
     const app = buildDashboardServer({ rootOverride: tmp });
-    const res = await app.inject({ method: 'GET', url: '/rules' });
+    const res = await app.inject({ method: 'GET', url: '/rules?lang=en' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Rule catalog');
     expect(res.body).toContain('R001');
     await app.close();
   });
 
-  it('overview shows all 4 tiers (good/ok/weak/bad) even when counts are 0', async () => {
-    // Seed one 'ok' prompt — other tiers should still render as 0, not be hidden.
+  it('overview shows all 5 tier slots (good/ok/weak/bad/n/a) with English labels', async () => {
     const db = openDb();
     upsertSession(db, { id: 's-tiers', cwd: '/tmp' });
     const u = insertPromptUsage(db, { session_id: 's-tiers', prompt_text: 'hello' });
@@ -85,20 +87,19 @@ describe('dashboard', () => {
     db.close();
 
     const app = buildDashboardServer({ rootOverride: tmp });
-    const res = await app.inject({ method: 'GET', url: '/' });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.statusCode).toBe(200);
-    // All 4 tier labels must appear in the breakdown, plus the 'n/a' (unscored).
     for (const tier of ['good', 'ok', 'weak', 'bad', 'n/a']) {
       expect(res.body).toContain(`>${tier}<`);
     }
-    // Total line is exposed.
     expect(res.body).toContain('Tier breakdown');
-    // Coach mode card must NOT be rendered on the overview anymore.
+    // Coach mode card is permanently removed from Overview (was previously
+    // a 3rd tile).
     expect(res.body).not.toContain('Coach mode');
     await app.close();
   });
 
-  it('overview renders the daily stacked-bar chart (SVG)', async () => {
+  it('overview renders the stacked-bar chart without the per-day text list', async () => {
     const db = openDb();
     upsertSession(db, { id: 's-chart', cwd: '/tmp' });
     const u = insertPromptUsage(db, { session_id: 's-chart', prompt_text: 'hi' });
@@ -112,12 +113,28 @@ describe('dashboard', () => {
     db.close();
 
     const app = buildDashboardServer({ rootOverride: tmp });
-    const res = await app.inject({ method: 'GET', url: '/' });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.statusCode).toBe(200);
-    // SVG container is present.
     expect(res.body).toMatch(/<svg[\s\S]*?viewBox/);
-    // Heading + window total line.
     expect(res.body).toContain('Daily additions');
+    // Per-day text list (e.g. "2026-04-10") was removed at user request —
+    // the chart stands alone now. Chart still renders day labels internally
+    // via MM/DD format, but the long "<date> · <counts>" rows are gone.
+    expect(res.body).not.toContain('border-b border-gray-100 dark:border-zinc-700 last:border-0');
+    await app.close();
+  });
+
+  it('live-refresh API returns the latest prompt id', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-live', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-live', prompt_text: 'check' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/api/overview/latest-id' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { latestId: string | null };
+    expect(body.latestId).toBe(u.id);
     await app.close();
   });
 
@@ -146,6 +163,76 @@ describe('dashboard', () => {
   });
 });
 
+describe('dashboard i18n', () => {
+  it('serves Korean chrome when ?lang=ko', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=ko' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('개요');
+    expect(res.body).toContain('전체 프롬프트');
+    expect(res.body).toContain('등급 분포');
+    expect(res.body).toContain('<html lang="ko">');
+    await app.close();
+  });
+
+  it('serves Chinese chrome when ?lang=zh', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=zh' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('概览');
+    expect(res.body).toContain('提示总数');
+    expect(res.body).toContain('等级分布');
+    expect(res.body).toContain('<html lang="zh">');
+    await app.close();
+  });
+
+  it('serves Spanish chrome when ?lang=es', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=es' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Resumen');
+    expect(res.body).toContain('Total de prompts');
+    expect(res.body).toContain('Distribución por nivel');
+    expect(res.body).toContain('<html lang="es">');
+    await app.close();
+  });
+
+  it('serves Japanese chrome when ?lang=ja', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=ja' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('概要');
+    expect(res.body).toContain('プロンプト総数');
+    expect(res.body).toContain('品質レベル分布');
+    expect(res.body).toContain('<html lang="ja">');
+    await app.close();
+  });
+
+  it('honours Accept-Language header when no ?lang= override', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/',
+      headers: { 'accept-language': 'es-ES,es;q=0.9,en;q=0.8' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Resumen');
+    await app.close();
+  });
+
+  it('renders a language switcher with all 5 locales', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('English');
+    expect(res.body).toContain('한국어');
+    expect(res.body).toContain('中文');
+    expect(res.body).toContain('Español');
+    expect(res.body).toContain('日本語');
+    await app.close();
+  });
+});
+
 describe('renderDailyChart', () => {
   const zeroDay = (
     day: string
@@ -167,9 +254,7 @@ describe('renderDailyChart', () => {
     const svg = renderDailyChart(data);
     expect(svg).toContain('<svg');
     expect(svg).toContain('viewBox');
-    // Gridline labels exist (niceCeil(3) = 5).
     expect(svg).toMatch(/<text[^>]*>5<\/text>/);
-    // Legend labels for ALL 5 statuses.
     for (const label of ['good', 'ok', 'weak', 'bad', 'n/a']) {
       expect(svg).toContain(`>${label}<`);
     }
@@ -188,11 +273,11 @@ describe('renderDailyChart', () => {
   it('colors segments by tier with the expected palette', () => {
     const data = [{ ...zeroDay('2026-04-10'), good: 1, ok: 1, weak: 1, bad: 1, na: 1, total: 5 }];
     const svg = renderDailyChart(data);
-    expect(svg).toContain('fill="#22c55e"'); // good  (green)
-    expect(svg).toContain('fill="#eab308"'); // ok    (yellow)
-    expect(svg).toContain('fill="#f97316"'); // weak  (orange)
-    expect(svg).toContain('fill="#ef4444"'); // bad   (red)
-    expect(svg).toContain('fill="#9ca3af"'); // n/a   (gray)
+    expect(svg).toContain('fill="#22c55e"');
+    expect(svg).toContain('fill="#eab308"');
+    expect(svg).toContain('fill="#f97316"');
+    expect(svg).toContain('fill="#ef4444"');
+    expect(svg).toContain('fill="#9ca3af"');
   });
 
   it('handles empty data (no rows) without throwing', () => {
