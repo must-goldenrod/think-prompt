@@ -129,6 +129,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const q = (req.query as any) ?? {};
     const tierFilter = typeof q.tier === 'string' ? q.tier : undefined;
     const ruleFilter = typeof q.rule === 'string' ? q.rule : undefined;
+    const sourceFilter = typeof q.source === 'string' && q.source ? q.source : undefined;
     const wheres: string[] = [];
     const args: any[] = [];
     if (tierFilter) {
@@ -141,26 +142,58 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       );
       args.push(ruleFilter);
     }
+    if (sourceFilter) {
+      wheres.push('COALESCE(s.source, ?) = ?');
+      args.push('claude-code', sourceFilter);
+    }
     const where = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
     const rows = db
       .prepare(
         `SELECT pu.id, substr(pu.prompt_text,1,160) AS snippet, pu.created_at, pu.char_len,
                 COALESCE(qs.final_score, -1) AS score, COALESCE(qs.tier, 'n/a') AS tier,
+                COALESCE(s.source, 'claude-code') AS source,
                 (SELECT COUNT(*) FROM rule_hits rh WHERE rh.usage_id=pu.id) AS hits
            FROM prompt_usages pu
            LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
+           LEFT JOIN sessions s ON s.id = pu.session_id
            ${where}
           ORDER BY pu.created_at DESC LIMIT 100`
       )
-      .all(...args) as any[];
+      .all(...args) as Array<{
+      id: string;
+      snippet: string;
+      created_at: string;
+      char_len: number;
+      score: number;
+      tier: string;
+      source: string;
+      hits: number;
+    }>;
+
+    const sourceOptions = [
+      'claude-code',
+      'chatgpt',
+      'claude-ai',
+      'gemini',
+      'perplexity',
+      'genspark',
+    ];
 
     const body = `
       <h1 class="text-2xl font-bold mb-4">Prompts</h1>
-      <form class="mb-4 flex gap-3 text-sm">
+      <form class="mb-4 flex gap-3 text-sm flex-wrap">
         <select name="tier" class="border rounded px-2 py-1 bg-white dark:bg-zinc-800">
           <option value="">All tiers</option>
           ${['good', 'ok', 'weak', 'bad']
             .map((t) => `<option value="${t}" ${tierFilter === t ? 'selected' : ''}>${t}</option>`)
+            .join('')}
+        </select>
+        <select name="source" class="border rounded px-2 py-1 bg-white dark:bg-zinc-800">
+          <option value="">All sources</option>
+          ${sourceOptions
+            .map(
+              (s) => `<option value="${s}" ${sourceFilter === s ? 'selected' : ''}>${s}</option>`
+            )
             .join('')}
         </select>
         <input name="rule" placeholder="rule id e.g. R003" value="${escapeHtml(ruleFilter ?? '')}"
@@ -173,6 +206,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           <tr>
             <th class="p-2 w-16">Score</th>
             <th class="p-2 w-20">Tier</th>
+            <th class="p-2 w-24">Source</th>
             <th class="p-2 w-10">Hits</th>
             <th class="p-2">Prompt</th>
             <th class="p-2 w-40">Created</th>
@@ -185,6 +219,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                 `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}'">
                    <td class="p-2 font-mono">${r.score >= 0 ? r.score : '-'}</td>
                    <td class="p-2">${tierBadge(r.tier)}</td>
+                   <td class="p-2 text-xs text-gray-600 dark:text-zinc-300">${escapeHtml(r.source)}</td>
                    <td class="p-2 text-gray-500">${r.hits}</td>
                    <td class="p-2 truncate max-w-[32rem]">${escapeHtml(r.snippet)}</td>
                    <td class="p-2 text-gray-400 text-xs">${escapeHtml(r.created_at)}</td>

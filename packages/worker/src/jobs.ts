@@ -44,7 +44,21 @@ export async function handleParseSubagentTranscript(
   payload: { session_id: string; agent_id: string; agent_transcript_path: string }
 ): Promise<'done' | 'retry'> {
   const text = safeReadFile(payload.agent_transcript_path, MAX_TRANSCRIPT_BYTES);
-  if (text == null) return 'retry';
+  if (text == null) {
+    // Transcript file no longer exists. Retrying will never succeed and just
+    // floods the DLQ — log the loss and move on so we don't block other jobs.
+    // The subagent row stays in whatever state it was; downstream UI tolerates
+    // it (status remains as last set by upsertSubagent).
+    ctx.logger.warn(
+      {
+        session_id: payload.session_id,
+        agent_id: payload.agent_id,
+        path: payload.agent_transcript_path,
+      },
+      'subagent transcript missing — dropping job'
+    );
+    return 'done';
+  }
   const events = tp.parseTranscriptString(text);
   const prompt_text = tp.extractFirstUserPrompt(events);
   const response_text = tp.extractFinalAssistantText(events);
@@ -65,7 +79,13 @@ export async function handleParseTranscript(
   payload: { session_id: string; transcript_path: string }
 ): Promise<'done' | 'retry'> {
   const text = safeReadFile(payload.transcript_path, MAX_TRANSCRIPT_BYTES);
-  if (text == null) return 'retry';
+  if (text == null) {
+    ctx.logger.warn(
+      { session_id: payload.session_id, path: payload.transcript_path },
+      'session transcript missing — dropping job'
+    );
+    return 'done';
+  }
   const events = tp.parseTranscriptString(text);
   const toolSummary = tp.summarizeToolUse(events);
 

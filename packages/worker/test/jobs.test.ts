@@ -61,7 +61,7 @@ describe('worker jobs', () => {
     db.close();
   });
 
-  it('retries when transcript file missing', async () => {
+  it('drops job when transcript file missing (avoids DLQ flood)', async () => {
     const db = openDb(tmp);
     const logger = createLogger('test', { stdout: false, file: join(tmp, 'test.log') });
     const config = loadConfig(tmp);
@@ -69,7 +69,7 @@ describe('worker jobs', () => {
       { db, logger, config },
       { session_id: 's2', agent_id: 'a1', agent_transcript_path: '/nonexistent/file.jsonl' }
     );
-    expect(result).toBe('retry');
+    expect(result).toBe('done');
     db.close();
   });
 

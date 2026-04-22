@@ -13,6 +13,12 @@ describe('extension pii masker', () => {
     expect(r.masked).toContain('<PHONE>');
   });
 
+  it('masks international phone (phone_intl)', () => {
+    const r = maskPii('call me at +82 10 1234 5678 anytime');
+    expect(r.masked).toContain('<PHONE>');
+    expect(r.hits.phone_intl ?? r.hits.phone_kr).toBeGreaterThanOrEqual(1);
+  });
+
   it('masks Anthropic key before generic sk-', () => {
     const r = maskPii('key=sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234');
     expect(r.masked).toContain('<ANTHROPIC_KEY>');

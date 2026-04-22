@@ -12,7 +12,8 @@ const genspark: PromptHook = {
 
   readPrompt(root) {
     if (root instanceof HTMLTextAreaElement) return root.value;
-    return (root as HTMLElement).innerText;
+    const el = root as HTMLElement;
+    return el.innerText || el.textContent || '';
   },
 
   onSubmit(root, cb) {

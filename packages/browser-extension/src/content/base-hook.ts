@@ -1,4 +1,4 @@
-import type { CapturedPrompt, SiteId } from '../shared/types.js';
+import type { CapturedPrompt, Message, SiteId } from '../shared/types.js';
 
 export interface PromptHook {
   readonly siteId: SiteId;
@@ -17,6 +17,8 @@ export interface PromptHook {
  * a PromptHook implementation.
  */
 export function activate(hook: PromptHook): void {
+  announceLoaded(hook.siteId);
+
   const root = hook.findInputRoot();
   if (root) {
     install(hook, root);
@@ -33,6 +35,18 @@ export function activate(hook: PromptHook): void {
   obs.observe(document.documentElement, { childList: true, subtree: true });
 }
 
+function announceLoaded(source: SiteId): void {
+  try {
+    const msg: Message = { kind: 'content-loaded', source };
+    chrome.runtime.sendMessage(msg, () => {
+      // swallow lastError — the page may outlive the service worker
+      void chrome.runtime.lastError;
+    });
+  } catch {
+    // no-op — runtime may be restarting
+  }
+}
+
 function install(hook: PromptHook, root: HTMLElement): void {
   const dispose = hook.onSubmit(root, (prompt) => {
     if (!prompt || prompt.trim().length === 0) return;
@@ -43,8 +57,9 @@ function install(hook: PromptHook, root: HTMLElement): void {
       captured_at: new Date().toISOString(),
     };
     try {
-      chrome.runtime.sendMessage({ kind: 'prompt', payload }, () => {
-        // response is IngestResult; we don't need to act on it here
+      chrome.runtime.sendMessage({ kind: 'prompt', payload } satisfies Message, () => {
+        // response is IngestResult; background handles badge update
+        void chrome.runtime.lastError;
       });
     } catch {
       // background may be restarting — lose the ping rather than crash the page.

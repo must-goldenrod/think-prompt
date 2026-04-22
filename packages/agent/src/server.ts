@@ -189,6 +189,10 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
   fastify.post('/v1/hook/subagent-stop', async (req) => {
     try {
       const p = SubagentStopPayload.parse(req.body);
+      // Defensive: subagent-start may have been missed (different daemon
+      // instance, restart, or Claude Code skipping the start hook). Ensure
+      // the parent session row exists before the FK-bound subagents insert.
+      upsertSession(db, { id: p.session_id, cwd: p.cwd ?? '/' });
       upsertSubagent(db, {
         session_id: p.session_id,
         agent_type: p.agent_type,
@@ -257,8 +261,20 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
 
   // /v1/ingest/web — prompts captured by the browser extension.
   // See docs/09-browser-extension-design.md §7.
-  fastify.post('/v1/ingest/web', async (req) => {
+  //
+  // Soft-auth via the `X-Think-Prompt-Ext` header: the agent binds to 127.0.0.1
+  // so network attackers are already blocked, but unrelated local processes
+  // (or a drive-by fetch from an unrelated browser tab) should not be able to
+  // pollute the local store. The browser extension sets this header on every
+  // call; anything missing it gets a 403.
+  fastify.post('/v1/ingest/web', async (req, reply) => {
     const t0 = Date.now();
+    const extHeader = req.headers['x-think-prompt-ext'];
+    if (extHeader !== '1') {
+      logger.warn({ hasHeader: extHeader != null }, 'web-ingest rejected — missing ext header');
+      reply.code(403);
+      return { ok: false, error: 'missing X-Think-Prompt-Ext header' };
+    }
     try {
       const p = WebIngestPayload.parse(req.body);
       const sessionId = `${p.source}:${p.browser_session_id}`;

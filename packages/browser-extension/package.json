@@ -6,12 +6,15 @@
   "private": true,
   "scripts": {
     "build": "node build.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@think-prompt/rules": "workspace:*"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@types/chrome": "^0.0.290",
     "esbuild": "^0.24.0",
     "jsdom": "^25.0.1",

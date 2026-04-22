@@ -11,7 +11,8 @@ const gemini: PromptHook = {
   },
 
   readPrompt(root) {
-    return (root as HTMLElement).innerText;
+    const el = root as HTMLElement;
+    return (el.innerText || el.textContent || '').trim();
   },
 
   onSubmit(root, cb) {

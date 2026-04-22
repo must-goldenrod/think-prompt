@@ -15,12 +15,14 @@ async function refreshStats(): Promise<void> {
   }
   chrome.runtime.sendMessage(
     { kind: 'stats' },
-    (res: { total: number; synced: number; pending: number } | undefined) => {
+    (res: { total: number; synced: number; pending: number; poisoned?: number } | undefined) => {
       if (!res) return;
       const p = document.getElementById('pending');
       const s = document.getElementById('synced');
+      const x = document.getElementById('poisoned');
       if (p) p.textContent = String(res.pending);
       if (s) s.textContent = String(res.synced);
+      if (x) x.textContent = String(res.poisoned ?? 0);
     }
   );
 }
