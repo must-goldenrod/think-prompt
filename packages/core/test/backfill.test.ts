@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseSessionFile, scanClaudeHistory } from '../src/backfill.js';
+import {
+  type RunRulesFn,
+  importClaudeHistory,
+  parseSessionFile,
+  scanClaudeHistory,
+} from '../src/backfill.js';
 import { insertPromptUsage, openDb, upsertSession } from '../src/db.js';
 
 /** Build a fake `~/.claude/projects/<project>/<session>.jsonl` hierarchy. */
@@ -204,6 +209,160 @@ describe('scanClaudeHistory', () => {
       expect(stats.latestTimestamp).toBe('2026-06-30T00:00:00.000Z');
     } finally {
       cleanup();
+    }
+  });
+});
+
+describe('importClaudeHistory', () => {
+  // A stub rules runner: flags anything with fewer than 10 chars as R001 sev 2.
+  const stubRunRules: RunRulesFn = ({ promptText }) => {
+    if (promptText.length < 10) {
+      return [
+        {
+          ruleId: 'R001',
+          ruleName: 'too_short',
+          severity: 2,
+          message: 'prompt is very short',
+          evidence: null,
+        },
+      ];
+    }
+    return [];
+  };
+
+  it('imports each candidate into prompt_usages with original timestamp', () => {
+    const { root, cleanup } = setupFixtureRoot();
+    const dbTmp = mkdtempSync(join(tmpdir(), 'tp-import-'));
+    try {
+      writeSessionFile(root, '-proj-x', 'session-x', [
+        userEntry('session-x', '/proj/x', '2026-02-01T10:00:00.000Z', 'first'),
+        userEntry('session-x', '/proj/x', '2026-02-01T10:05:00.000Z', 'second prompt here'),
+      ]);
+      const db = openDb(dbTmp);
+      const result = importClaudeHistory(db, { root, runRules: stubRunRules });
+      expect(result.imported).toBe(2);
+      expect(result.skippedDup).toBe(0);
+      expect(result.distinctSessions).toBe(1);
+
+      // Rows use the JSONL timestamp, not "now".
+      const rows = db
+        .prepare(`SELECT prompt_text, created_at FROM prompt_usages ORDER BY created_at ASC`)
+        .all() as Array<{ prompt_text: string; created_at: string }>;
+      expect(rows).toHaveLength(2);
+      expect(rows[0]?.created_at).toBe('2026-02-01T10:00:00.000Z');
+      expect(rows[0]?.prompt_text).toBe('first');
+      expect(rows[1]?.created_at).toBe('2026-02-01T10:05:00.000Z');
+      db.close();
+    } finally {
+      cleanup();
+      rmSync(dbTmp, { recursive: true, force: true });
+    }
+  });
+
+  it('is idempotent — second run adds no new rows', () => {
+    const { root, cleanup } = setupFixtureRoot();
+    const dbTmp = mkdtempSync(join(tmpdir(), 'tp-import-'));
+    try {
+      writeSessionFile(root, '-proj-y', 'session-y', [
+        userEntry('session-y', '/proj/y', '2026-03-01T09:00:00.000Z', 'only one'),
+      ]);
+      const db = openDb(dbTmp);
+      const first = importClaudeHistory(db, { root, runRules: stubRunRules });
+      expect(first.imported).toBe(1);
+
+      const second = importClaudeHistory(db, { root, runRules: stubRunRules });
+      expect(second.imported).toBe(0);
+      expect(second.skippedDup).toBe(1);
+
+      const cnt = db.prepare(`SELECT COUNT(*) AS c FROM prompt_usages`).get() as { c: number };
+      expect(cnt.c).toBe(1);
+      db.close();
+    } finally {
+      cleanup();
+      rmSync(dbTmp, { recursive: true, force: true });
+    }
+  });
+
+  it('runs rules and writes quality_scores + rule_hits', () => {
+    const { root, cleanup } = setupFixtureRoot();
+    const dbTmp = mkdtempSync(join(tmpdir(), 'tp-import-'));
+    try {
+      writeSessionFile(root, '-proj-z', 'session-z', [
+        userEntry('session-z', '/proj/z', '2026-04-01T00:00:00.000Z', 'hi'),
+      ]);
+      const db = openDb(dbTmp);
+      importClaudeHistory(db, { root, runRules: stubRunRules });
+
+      const scores = db.prepare(`SELECT final_score, tier FROM quality_scores`).all() as Array<{
+        final_score: number;
+        tier: string;
+      }>;
+      expect(scores).toHaveLength(1);
+      // Stub rule fires sev=2 -> rule_score = 100 - 5 = 95 -> tier 'good'.
+      expect(scores[0]?.final_score).toBe(95);
+
+      const hits = db.prepare(`SELECT rule_id FROM rule_hits`).all() as Array<{ rule_id: string }>;
+      expect(hits).toHaveLength(1);
+      expect(hits[0]?.rule_id).toBe('R001');
+      db.close();
+    } finally {
+      cleanup();
+      rmSync(dbTmp, { recursive: true, force: true });
+    }
+  });
+
+  it('upserts the session row with source=claude-code-backfill', () => {
+    const { root, cleanup } = setupFixtureRoot();
+    const dbTmp = mkdtempSync(join(tmpdir(), 'tp-import-'));
+    try {
+      writeSessionFile(root, '-proj-w', 'session-w', [
+        userEntry('session-w', '/proj/w', '2026-05-01T00:00:00.000Z', 'hello there'),
+      ]);
+      const db = openDb(dbTmp);
+      importClaudeHistory(db, { root, runRules: stubRunRules });
+
+      const session = db
+        .prepare(`SELECT id, cwd, source FROM sessions WHERE id=?`)
+        .get('session-w') as { id: string; cwd: string; source: string };
+      expect(session.cwd).toBe('/proj/w');
+      expect(session.source).toBe('claude-code-backfill');
+      db.close();
+    } finally {
+      cleanup();
+      rmSync(dbTmp, { recursive: true, force: true });
+    }
+  });
+
+  it('reports progress via the callback', () => {
+    const { root, cleanup } = setupFixtureRoot();
+    const dbTmp = mkdtempSync(join(tmpdir(), 'tp-import-'));
+    try {
+      // 7 prompts split across 2 files.
+      writeSessionFile(root, '-p-a', 'session-a', [
+        userEntry('session-a', '/p/a', '2026-01-01T00:00:00.000Z', 'one'),
+        userEntry('session-a', '/p/a', '2026-01-02T00:00:00.000Z', 'two'),
+        userEntry('session-a', '/p/a', '2026-01-03T00:00:00.000Z', 'three'),
+      ]);
+      writeSessionFile(root, '-p-b', 'session-b', [
+        userEntry('session-b', '/p/b', '2026-01-04T00:00:00.000Z', 'four'),
+        userEntry('session-b', '/p/b', '2026-01-05T00:00:00.000Z', 'five'),
+        userEntry('session-b', '/p/b', '2026-01-06T00:00:00.000Z', 'six'),
+        userEntry('session-b', '/p/b', '2026-01-07T00:00:00.000Z', 'seven'),
+      ]);
+      const db = openDb(dbTmp);
+      const calls: number[] = [];
+      importClaudeHistory(db, {
+        root,
+        runRules: stubRunRules,
+        batchSize: 3,
+        onProgress: (p) => calls.push(p.processed),
+      });
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[calls.length - 1]).toBe(7);
+      db.close();
+    } finally {
+      cleanup();
+      rmSync(dbTmp, { recursive: true, force: true });
     }
   });
 });
