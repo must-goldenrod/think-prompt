@@ -23,7 +23,10 @@ export const ConfigSchema = z.object({
     .object({
       store_original: z.boolean().default(true),
       pii_mask: z.boolean().default(true),
-      retention_days: z.number().default(90),
+      // 0 = keep forever (no retention limit). Positive N = purge records
+      // older than N days when a cleanup job runs (none ships today — this
+      // field is declarative until a retention worker is added).
+      retention_days: z.number().default(0),
       sync_to_server: z.boolean().default(false),
     })
     .default({}),

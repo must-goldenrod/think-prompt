@@ -42,6 +42,7 @@ export interface Dictionary {
   'common.no_data': string;
   'common.none': string;
   'common.language': string;
+  'common.all': string;
 
   /* overview */
   'overview.title': string;
@@ -133,6 +134,7 @@ const EN: Dictionary = {
   'common.no_data': 'no data',
   'common.none': '(none)',
   'common.language': 'Language',
+  'common.all': 'all',
 
   'overview.title': 'Overview',
   'overview.total_prompts': 'Total prompts',
@@ -216,6 +218,7 @@ const KO: Dictionary = {
   'common.no_data': '데이터 없음',
   'common.none': '(없음)',
   'common.language': '언어',
+  'common.all': '전체',
 
   'overview.title': '개요',
   'overview.total_prompts': '전체 프롬프트',
@@ -299,6 +302,7 @@ const ZH: Dictionary = {
   'common.no_data': '暂无数据',
   'common.none': '(无)',
   'common.language': '语言',
+  'common.all': '全部',
 
   'overview.title': '概览',
   'overview.total_prompts': '提示总数',
@@ -382,6 +386,7 @@ const ES: Dictionary = {
   'common.no_data': 'sin datos',
   'common.none': '(ninguno)',
   'common.language': 'Idioma',
+  'common.all': 'todo',
 
   'overview.title': 'Resumen',
   'overview.total_prompts': 'Total de prompts',
@@ -465,6 +470,7 @@ const JA: Dictionary = {
   'common.no_data': 'データなし',
   'common.none': '(なし)',
   'common.language': '言語',
+  'common.all': 'すべて',
 
   'overview.title': '概要',
   'overview.total_prompts': 'プロンプト総数',
