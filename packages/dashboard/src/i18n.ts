@@ -120,6 +120,24 @@ export interface Dictionary {
   'tier.weak': string;
   'tier.bad': string;
   'tier.na': string;
+
+  /* deep analysis (D-033) */
+  'detail.deep_analysis': string;
+  'analysis.consent_title': string;
+  'analysis.consent_body': string;
+  'analysis.consent_grant': string;
+  'analysis.consent_deny': string;
+  'analysis.consent_denied_note': string;
+  'analysis.consent_change': string;
+  'analysis.run_button': string;
+  'analysis.run_hint': string;
+  'analysis.llm_disabled_note': string;
+  'analysis.no_results_yet': string;
+  'analysis.failed': string;
+  'analysis.problems': string;
+  'analysis.reasoning': string;
+  'analysis.suggested_rewrite': string;
+  'analysis.applied_fixes': string;
 }
 
 const EN: Dictionary = {
@@ -204,6 +222,24 @@ const EN: Dictionary = {
   'tier.weak': 'weak',
   'tier.bad': 'bad',
   'tier.na': 'n/a',
+
+  'detail.deep_analysis': 'Deep analysis',
+  'analysis.consent_title': 'Allow deep analysis?',
+  'analysis.consent_body':
+    'Deep analysis sends the PII-masked prompt text to your configured LLM to produce problem categories, step-by-step reasoning, and a suggested rewrite.\nNothing else leaves your machine. You can revoke this consent anytime.',
+  'analysis.consent_grant': 'Allow',
+  'analysis.consent_deny': 'Not now',
+  'analysis.consent_denied_note': 'Deep analysis is disabled per your choice.',
+  'analysis.consent_change': 'Change my mind',
+  'analysis.run_button': 'Run deep analysis',
+  'analysis.run_hint': '(uses your configured LLM; one round trip)',
+  'analysis.llm_disabled_note': 'LLM is not enabled. Enable it with:',
+  'analysis.no_results_yet': 'No deep analyses yet for this prompt.',
+  'analysis.failed': 'analysis failed',
+  'analysis.problems': 'Problems identified',
+  'analysis.reasoning': 'Reasoning',
+  'analysis.suggested_rewrite': 'Suggested rewrite',
+  'analysis.applied_fixes': 'applied fixes',
 };
 
 const KO: Dictionary = {
@@ -288,6 +324,24 @@ const KO: Dictionary = {
   'tier.weak': '주의',
   'tier.bad': '불량',
   'tier.na': '미채점',
+
+  'detail.deep_analysis': '심화 분석',
+  'analysis.consent_title': '심화 분석을 허용하시겠습니까?',
+  'analysis.consent_body':
+    '심화 분석은 PII가 마스킹된 프롬프트 텍스트를 설정된 LLM 에게 보내서 문제 카테고리 · 단계별 개선 논리 · 심화 리라이트를 받아옵니다.\n그 외에는 아무 것도 기기 밖으로 나가지 않습니다. 동의는 언제든 철회할 수 있습니다.',
+  'analysis.consent_grant': '허용',
+  'analysis.consent_deny': '지금은 아님',
+  'analysis.consent_denied_note': '심화 분석이 설정에 의해 비활성화되어 있습니다.',
+  'analysis.consent_change': '변경하기',
+  'analysis.run_button': '심화 분석 실행',
+  'analysis.run_hint': '(설정된 LLM 을 사용, 1회 왕복)',
+  'analysis.llm_disabled_note': 'LLM 이 비활성화되어 있습니다. 활성화:',
+  'analysis.no_results_yet': '아직 심화 분석 결과가 없습니다.',
+  'analysis.failed': '분석 실패',
+  'analysis.problems': '식별된 문제',
+  'analysis.reasoning': '개선 논리',
+  'analysis.suggested_rewrite': '개선된 프롬프트',
+  'analysis.applied_fixes': '적용된 수정 룰',
 };
 
 const ZH: Dictionary = {
@@ -372,6 +426,24 @@ const ZH: Dictionary = {
   'tier.weak': '弱',
   'tier.bad': '差',
   'tier.na': '未评',
+
+  'detail.deep_analysis': '深度分析',
+  'analysis.consent_title': '是否允许深度分析?',
+  'analysis.consent_body':
+    '深度分析会将已脱敏的提示文本发送给您配置的 LLM, 以生成问题分类、逐步改进逻辑和改写建议。\n除此之外, 没有任何数据离开您的机器。可以随时撤回同意。',
+  'analysis.consent_grant': '允许',
+  'analysis.consent_deny': '暂不',
+  'analysis.consent_denied_note': '深度分析已按您的选择禁用。',
+  'analysis.consent_change': '更改选择',
+  'analysis.run_button': '运行深度分析',
+  'analysis.run_hint': '(使用您配置的 LLM, 一次往返)',
+  'analysis.llm_disabled_note': 'LLM 尚未启用。启用命令:',
+  'analysis.no_results_yet': '此提示尚无深度分析结果。',
+  'analysis.failed': '分析失败',
+  'analysis.problems': '识别出的问题',
+  'analysis.reasoning': '改进推理',
+  'analysis.suggested_rewrite': '改写建议',
+  'analysis.applied_fixes': '应用的修复规则',
 };
 
 const ES: Dictionary = {
@@ -456,6 +528,24 @@ const ES: Dictionary = {
   'tier.weak': 'débil',
   'tier.bad': 'malo',
   'tier.na': 's/p',
+
+  'detail.deep_analysis': 'Análisis profundo',
+  'analysis.consent_title': '¿Permitir análisis profundo?',
+  'analysis.consent_body':
+    'El análisis profundo envía el texto del prompt (con PII enmascarado) al LLM configurado para obtener categorías de problemas, razonamiento paso a paso y una reescritura sugerida.\nNada más sale de tu máquina. Puedes revocar el permiso cuando quieras.',
+  'analysis.consent_grant': 'Permitir',
+  'analysis.consent_deny': 'Ahora no',
+  'analysis.consent_denied_note': 'El análisis profundo está desactivado por tu decisión.',
+  'analysis.consent_change': 'Cambiar',
+  'analysis.run_button': 'Ejecutar análisis profundo',
+  'analysis.run_hint': '(usa el LLM configurado; una llamada)',
+  'analysis.llm_disabled_note': 'El LLM no está habilitado. Actívalo con:',
+  'analysis.no_results_yet': 'Todavía no hay análisis profundos para este prompt.',
+  'analysis.failed': 'análisis falló',
+  'analysis.problems': 'Problemas identificados',
+  'analysis.reasoning': 'Razonamiento',
+  'analysis.suggested_rewrite': 'Reescritura sugerida',
+  'analysis.applied_fixes': 'reglas aplicadas',
 };
 
 const JA: Dictionary = {
@@ -540,6 +630,24 @@ const JA: Dictionary = {
   'tier.weak': '弱',
   'tier.bad': '不良',
   'tier.na': '未評価',
+
+  'detail.deep_analysis': '深掘り分析',
+  'analysis.consent_title': '深掘り分析を許可しますか?',
+  'analysis.consent_body':
+    '深掘り分析は PII をマスクしたプロンプトテキストを設定済みの LLM に送信し、問題カテゴリ・ステップ論理・改善案を受け取ります。\nそれ以外のデータは端末外に出ません。同意はいつでも取り消せます。',
+  'analysis.consent_grant': '許可',
+  'analysis.consent_deny': '今はやめる',
+  'analysis.consent_denied_note': '深掘り分析は設定により無効化されています。',
+  'analysis.consent_change': '変更',
+  'analysis.run_button': '深掘り分析を実行',
+  'analysis.run_hint': '(設定済み LLM を使用、1往復)',
+  'analysis.llm_disabled_note': 'LLM が有効ではありません。有効化:',
+  'analysis.no_results_yet': 'このプロンプトの深掘り分析結果はまだありません。',
+  'analysis.failed': '分析失敗',
+  'analysis.problems': '検出された問題',
+  'analysis.reasoning': '推論',
+  'analysis.suggested_rewrite': '改善案',
+  'analysis.applied_fixes': '適用されたルール',
 };
 
 const DICTS: Record<Locale, Dictionary> = { en: EN, ko: KO, zh: ZH, es: ES, ja: JA };

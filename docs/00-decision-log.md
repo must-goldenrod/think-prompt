@@ -215,5 +215,38 @@
 - 윈도우 지원 방식 — M9 이후
 - Cursor / VSCode 확장 — Phase 2
 
+## D-033 · 심화 분석(deep analysis) 동의 정책
+- **날짜:** 2026-04-22
+- **컨텍스트:** 사용자가 `think-prompt rewrite` 보다 깊은 진단을 원할 때 — 문제 카테고리 · 단계별 개선 논리 · 심화 리라이트를 Anthropic LLM 에게 요청해서 로컬에 저장하고 싶다. 이 LLM 호출은 D-004(로컬 중심) 와 충돌하지 않지만, **D-015(LLM SDK) 보다 명시적인 동의 UX** 가 필요하다.
+- **대안:**
+  - ① **Settings 페이지 토글** — 한 번 켜면 이후 모든 심화 분석이 자동으로 동작
+  - ② **첫 사용 시 모달 + "다시 묻지 않음"** — UI 관점에서 존중적, GDPR 친화
+  - ③ **프롬프트마다 매번 묻기** — 너무 번거로움
+- **결정:** **②** 기본 채택. 구체 구현:
+  1. 신규 config 필드 `analysis.deep_consent: 'pending' | 'granted' | 'denied'` (기본 `'pending'`), `analysis.deep_consent_at: string | null` (타임스탬프).
+  2. CLI: `think-prompt analyze <id>` 는 `deep_consent !== 'granted'` 이면 실행 전 설명 + `--grant-consent` / `--revoke-consent` 안내 후 exit 1.
+  3. 대시보드: `'pending'` 상태일 때 prompt 상세 페이지 상단에 배너로 안내 + "허용 / 거부" 버튼. 허용하면 config 에 기록되고 배너는 사라진다.
+  4. 출력 깊이: `{problems: [{category, severity, explanation}], reasoning: string[], after_text: string, applied_fixes: string[]}` — 현재 `rewrite` 에서 제공하는 `{after_text, reason, applied_fixes}` 대비 **problems** 와 **reasoning(단계별 논리)** 이 추가된 🅑 버전.
+  5. LLM 에 전송되는 본문은 `pii_masked` 가 있을 때 그것을 우선 사용 (D-016 준수).
+  6. 결과는 `deep_analyses` 테이블에 성공/실패 모두 기록 (audit trail).
+- **근거:**
+  - 첫 사용 모달 (🅑) 은 유저가 "무엇이 어떻게 전송되는지" 를 **딱 한 번** 보게 하면서, 그 이후로는 마찰 없이 기능을 쓸 수 있게 한다. 매번 묻기(③)는 실용적으로 사용 안 됨.
+  - Settings 토글 (①) 은 GDPR 관점에서 "informed consent" 의 informed 부분이 약함 — 토글 자체에 "이게 뭔지" 가 안 드러남.
+  - 출력 깊이 🅑 가 🅐(분류만) 대비 학습 가치가 훨씬 크고, 🅒(페르소나 추론) 대비 토큰 비용 통제 쉬움(~1500 tok/req).
+  - `deep_analyses` 를 `rewrites` 와 분리한 이유: 스키마 진화를 독립적으로 하고, 역사적 rewrite 행의 형태 안정성을 보전하기 위함.
+- **영향:**
+  - `packages/core/src/config.ts` — `analysis` 섹션 신설
+  - `packages/core/src/migrations/sql.ts` — MIGRATION_004 (`deep_analyses` 테이블)
+  - `packages/core/src/analysis.ts` 신규 — `runDeepAnalysis`
+  - `packages/core/src/db.ts` — `insertDeepAnalysis`, `getDeepAnalyses`
+  - `packages/cli/src/commands/analyze.ts` 신규 — `think-prompt analyze`
+  - 대시보드 detail 페이지 — consent banner + 분석 버튼 + 결과 패널
+- **열린 항목:**
+  - 배치 분석(TOP N 낮은 프롬프트 일괄 분석) — follow-up PR
+  - 비용 상한 초과 시 유저 알림 UX — `llm.max_monthly_tokens` 이미 존재하지만 대시보드 노출은 아직 없음
+  - 언젠가 OpenAI / Gemini 어댑터 추가 시 DEEP_SYSTEM 프롬프트의 provider-specific 튜닝 필요
+
+---
+
 ## 취소된 결정
 *(없음 — 새 결정이 기존 것을 번복할 때 여기에 기록)*

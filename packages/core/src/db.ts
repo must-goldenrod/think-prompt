@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import Database, { type Database as Db } from 'better-sqlite3';
 import { detectLanguage } from './lang.js';
-import { MIGRATION_001, MIGRATION_002, MIGRATION_003 } from './migrations/sql.js';
+import { MIGRATION_001, MIGRATION_002, MIGRATION_003, MIGRATION_004 } from './migrations/sql.js';
 import { getPaths } from './paths.js';
 import { maskPii } from './pii.js';
 import { ulid } from './ulid.js';
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 export function openDb(rootOverride?: string): Db {
   const paths = getPaths(rootOverride);
@@ -34,6 +34,7 @@ function runMigrations(db: Db): void {
     { v: 1, sql: MIGRATION_001 },
     { v: 2, sql: MIGRATION_002 },
     { v: 3, sql: MIGRATION_003 },
+    { v: 4, sql: MIGRATION_004 },
   ];
   for (const m of migrations) {
     if (m.v <= current) continue;
@@ -393,4 +394,125 @@ export function getOutcomeTotals(db: Db, usage_id: string): { ups: number; downs
     )
     .get(usage_id) as { ups: number | null; downs: number | null };
   return { ups: row.ups ?? 0, downs: row.downs ?? 0 };
+}
+
+/* ---------------- deep_analyses ---------------------------------------- */
+
+export interface DeepAnalysisProblem {
+  category: string;
+  severity: number;
+  explanation: string;
+}
+
+export interface DeepAnalysisRow {
+  id: string;
+  usage_id: string;
+  model: string;
+  status: string;
+  problems: DeepAnalysisProblem[];
+  reasoning: string[];
+  after_text: string;
+  applied_fixes: string[];
+  input_tokens: number | null;
+  output_tokens: number | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface InsertDeepAnalysisInput {
+  usage_id: string;
+  model: string;
+  status: 'ok' | 'failed';
+  problems: DeepAnalysisProblem[];
+  reasoning: string[];
+  after_text: string;
+  applied_fixes?: string[];
+  input_tokens?: number;
+  output_tokens?: number;
+  error_message?: string;
+}
+
+/** Persist a deep analysis result. Caller handles LLM errors above. */
+export function insertDeepAnalysis(db: Db, input: InsertDeepAnalysisInput): DeepAnalysisRow {
+  const id = ulid();
+  const createdAt = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO deep_analyses(id, usage_id, model, status, problems_json, reasoning_json,
+                                after_text, applied_fixes, input_tokens, output_tokens,
+                                error_message, created_at)
+     VALUES (@id, @usage_id, @model, @status, @problems_json, @reasoning_json,
+             @after_text, @applied_fixes, @input_tokens, @output_tokens,
+             @error_message, @created_at)`
+  ).run({
+    id,
+    usage_id: input.usage_id,
+    model: input.model,
+    status: input.status,
+    problems_json: JSON.stringify(input.problems),
+    reasoning_json: JSON.stringify(input.reasoning),
+    after_text: input.after_text,
+    applied_fixes: JSON.stringify(input.applied_fixes ?? []),
+    input_tokens: input.input_tokens ?? null,
+    output_tokens: input.output_tokens ?? null,
+    error_message: input.error_message ?? null,
+    created_at: createdAt,
+  });
+  return {
+    id,
+    usage_id: input.usage_id,
+    model: input.model,
+    status: input.status,
+    problems: input.problems,
+    reasoning: input.reasoning,
+    after_text: input.after_text,
+    applied_fixes: input.applied_fixes ?? [],
+    input_tokens: input.input_tokens ?? null,
+    output_tokens: input.output_tokens ?? null,
+    error_message: input.error_message ?? null,
+    created_at: createdAt,
+  };
+}
+
+/** Fetch the deep-analysis history for one prompt usage, newest first.
+ *  The `id DESC` tiebreaker makes the order deterministic even when two
+ *  inserts land in the same millisecond (ULIDs embed a monotonic counter). */
+export function getDeepAnalyses(db: Db, usage_id: string): DeepAnalysisRow[] {
+  const rows = db
+    .prepare(`SELECT * FROM deep_analyses WHERE usage_id=? ORDER BY created_at DESC, id DESC`)
+    .all(usage_id) as Array<{
+    id: string;
+    usage_id: string;
+    model: string;
+    status: string;
+    problems_json: string;
+    reasoning_json: string;
+    after_text: string;
+    applied_fixes: string | null;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    error_message: string | null;
+    created_at: string;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    usage_id: r.usage_id,
+    model: r.model,
+    status: r.status,
+    problems: safeJsonParse<DeepAnalysisProblem[]>(r.problems_json, []),
+    reasoning: safeJsonParse<string[]>(r.reasoning_json, []),
+    after_text: r.after_text,
+    applied_fixes: safeJsonParse<string[]>(r.applied_fixes ?? '[]', []),
+    input_tokens: r.input_tokens,
+    output_tokens: r.output_tokens,
+    error_message: r.error_message,
+    created_at: r.created_at,
+  }));
+}
+
+function safeJsonParse<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }

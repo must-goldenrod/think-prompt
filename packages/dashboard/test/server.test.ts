@@ -314,6 +314,64 @@ describe('dashboard i18n', () => {
   });
 });
 
+describe('deep analysis UI (D-033)', () => {
+  it('shows a consent banner on prompt detail when deep_consent is pending (default)', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-consent', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-consent', prompt_text: 'ping' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Allow deep analysis?');
+    expect(res.body).toContain('/settings/consent');
+    // With consent pending + LLM off, the run button must NOT appear yet.
+    expect(res.body).not.toContain('Run deep analysis');
+    await app.close();
+  });
+
+  it('POST /settings/consent flips deep_consent and redirects', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-c2', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-c2', prompt_text: 'x' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/settings/consent',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `decision=grant&return_to=/prompts/${u.id}`,
+    });
+    expect([200, 302]).toContain(res.statusCode);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: `/prompts/${u.id}?lang=en`,
+    });
+    // Banner should be gone now.
+    expect(after.body).not.toContain('Allow deep analysis?');
+    await app.close();
+  });
+
+  it('rejects POST /prompts/:id/analyze when consent is not granted', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-c3', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-c3', prompt_text: 'whatever' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/prompts/${u.id}/analyze`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('llm is disabled');
+    await app.close();
+  });
+});
+
 describe('renderDailyChart', () => {
   const zeroDay = (
     day: string

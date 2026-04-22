@@ -303,3 +303,169 @@ function niceCeil(v: number): number {
   const niceBase = base <= 1 ? 1 : base <= 2 ? 2 : base <= 5 ? 5 : 10;
   return niceBase * pow;
 }
+
+/* ----------------------- deep analysis section ------------------------- */
+
+export interface DeepAnalysisViewRow {
+  id: string;
+  status: string;
+  created_at: string;
+  model: string;
+  after_text: string;
+  problems: Array<{ category: string; severity: number; explanation: string }>;
+  reasoning: string[];
+  applied_fixes: string[];
+  input_tokens: number | null;
+  output_tokens: number | null;
+  error_message: string | null;
+}
+
+/**
+ * Render the consent banner (if needed) + the "run analysis" button (if
+ * granted) + the history of deep analyses for one prompt.
+ *
+ * Intentionally inline: the block is one UI region on one page, not a
+ * reusable component. Keeping it in html.ts avoids pulling React-ish
+ * patterns into an otherwise static server-rendered dashboard.
+ */
+export function renderDeepAnalysisSection(
+  usageId: string,
+  locale: Locale,
+  consent: 'pending' | 'granted' | 'denied',
+  llmEnabled: boolean,
+  canAnalyze: boolean,
+  analyses: DeepAnalysisViewRow[]
+): string {
+  const safeId = escapeHtml(usageId);
+  let banner = '';
+
+  if (consent === 'pending') {
+    banner = `
+      <div class="bg-amber-50 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-4">
+        <div class="text-sm font-semibold mb-2">${escapeHtml(t(locale, 'analysis.consent_title'))}</div>
+        <div class="text-xs text-gray-700 dark:text-zinc-200 mb-3 whitespace-pre-line">${escapeHtml(t(locale, 'analysis.consent_body'))}</div>
+        <div class="flex gap-2">
+          <form method="POST" action="/settings/consent" style="display:inline">
+            <input type="hidden" name="decision" value="grant" />
+            <input type="hidden" name="return_to" value="/prompts/${safeId}?lang=${locale}" />
+            <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700">${escapeHtml(t(locale, 'analysis.consent_grant'))}</button>
+          </form>
+          <form method="POST" action="/settings/consent" style="display:inline">
+            <input type="hidden" name="decision" value="revoke" />
+            <input type="hidden" name="return_to" value="/prompts/${safeId}?lang=${locale}" />
+            <button class="px-3 py-1 rounded border border-gray-300 dark:border-zinc-600 text-xs hover:bg-gray-100 dark:hover:bg-zinc-700">${escapeHtml(t(locale, 'analysis.consent_deny'))}</button>
+          </form>
+        </div>
+      </div>`;
+  } else if (consent === 'denied') {
+    banner = `
+      <div class="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg p-3 mb-4 text-xs text-gray-600 dark:text-zinc-300">
+        ${escapeHtml(t(locale, 'analysis.consent_denied_note'))}
+        <form method="POST" action="/settings/consent" class="inline ml-2">
+          <input type="hidden" name="decision" value="grant" />
+          <input type="hidden" name="return_to" value="/prompts/${safeId}?lang=${locale}" />
+          <button class="underline hover:text-blue-600">${escapeHtml(t(locale, 'analysis.consent_change'))}</button>
+        </form>
+      </div>`;
+  }
+
+  let runButton = '';
+  if (canAnalyze) {
+    runButton = `
+      <form method="POST" action="/prompts/${safeId}/analyze" class="mb-4">
+        <button class="px-4 py-2 rounded bg-purple-600 text-white text-sm hover:bg-purple-700">
+          ${escapeHtml(t(locale, 'analysis.run_button'))}
+        </button>
+        <span class="ml-2 text-xs text-gray-500">${escapeHtml(t(locale, 'analysis.run_hint'))}</span>
+      </form>`;
+  } else if (consent === 'granted' && !llmEnabled) {
+    runButton = `
+      <div class="text-xs text-gray-500 mb-4">
+        ${escapeHtml(t(locale, 'analysis.llm_disabled_note'))}
+        <code class="px-1">think-prompt config set llm.enabled true</code>
+      </div>`;
+  }
+
+  const history =
+    analyses.length === 0
+      ? `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'analysis.no_results_yet'))}</div>`
+      : analyses.map((a) => renderDeepAnalysisCard(a, locale)).join('');
+
+  return `${banner}${runButton}<div class="space-y-3">${history}</div>`;
+}
+
+function renderDeepAnalysisCard(a: DeepAnalysisViewRow, locale: Locale): string {
+  if (a.status !== 'ok') {
+    return `
+      <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+        <div class="text-xs text-red-700 dark:text-red-300 mb-2">
+          ${escapeHtml(t(locale, 'analysis.failed'))} · ${escapeHtml(a.created_at)}
+        </div>
+        <div class="text-xs text-gray-700 dark:text-zinc-200">${escapeHtml(a.error_message ?? '')}</div>
+      </div>`;
+  }
+
+  const problems = a.problems
+    .map(
+      (p) => `
+        <li class="flex items-start gap-2 text-sm">
+          <span class="font-mono text-xs text-gray-500">sev ${p.severity}</span>
+          <span class="font-semibold text-purple-700 dark:text-purple-300">${escapeHtml(p.category)}</span>
+          <span class="flex-1">${escapeHtml(p.explanation)}</span>
+        </li>`
+    )
+    .join('');
+
+  const reasoning = a.reasoning
+    .map(
+      (r, i) =>
+        `<li class="text-sm"><span class="font-mono text-xs text-gray-500 mr-1">${i + 1}.</span>${escapeHtml(r)}</li>`
+    )
+    .join('');
+
+  const fixes =
+    a.applied_fixes.length > 0
+      ? `<div class="text-xs text-gray-500 mt-2">${escapeHtml(t(locale, 'analysis.applied_fixes'))}: ${a.applied_fixes
+          .map((f) => `<code class="px-1">${escapeHtml(f)}</code>`)
+          .join(' ')}</div>`
+      : '';
+
+  const tokens =
+    a.input_tokens || a.output_tokens
+      ? `<div class="text-xs text-gray-400">tokens: in=${a.input_tokens ?? '-'} out=${a.output_tokens ?? '-'}</div>`
+      : '';
+
+  return `
+    <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4 border-l-4 border-purple-500">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs text-gray-500">
+          ${escapeHtml(a.model)} · ${escapeHtml(a.created_at)}
+        </div>
+        ${tokens}
+      </div>
+
+      ${
+        a.problems.length > 0
+          ? `<div class="mb-3">
+               <div class="text-xs font-bold text-gray-500 mb-1">${escapeHtml(t(locale, 'analysis.problems'))}</div>
+               <ul class="space-y-1">${problems}</ul>
+             </div>`
+          : ''
+      }
+
+      ${
+        a.reasoning.length > 0
+          ? `<div class="mb-3">
+               <div class="text-xs font-bold text-gray-500 mb-1">${escapeHtml(t(locale, 'analysis.reasoning'))}</div>
+               <ul class="space-y-1">${reasoning}</ul>
+             </div>`
+          : ''
+      }
+
+      <div>
+        <div class="text-xs font-bold text-gray-500 mb-1">${escapeHtml(t(locale, 'analysis.suggested_rewrite'))}</div>
+        <pre class="text-sm bg-gray-50 dark:bg-zinc-900 p-3 rounded">${escapeHtml(a.after_text)}</pre>
+      </div>
+      ${fixes}
+    </div>`;
+}
