@@ -1,8 +1,26 @@
 {
   "name": "@think-prompt/dashboard",
   "version": "0.1.0",
-  "description": "Local web dashboard for Think-Prompt",
+  "description": "Think-Prompt local web dashboard (127.0.0.1:47824) — 5-language i18n, deep analysis UI",
   "type": "module",
+  "license": "MIT",
+  "author": "Think-Prompt contributors",
+  "homepage": "https://github.com/must-goldenrod/think-prompt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/must-goldenrod/think-prompt.git",
+    "directory": "packages/dashboard"
+  },
+  "bugs": {
+    "url": "https://github.com/must-goldenrod/think-prompt/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "dashboard",
+    "fastify",
+    "i18n",
+    "local-first"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,7 +33,16 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit"

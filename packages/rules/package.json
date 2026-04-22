@@ -1,8 +1,26 @@
 {
   "name": "@think-prompt/rules",
   "version": "0.1.0",
-  "description": "Antipattern rules R001..R012",
+  "description": "Think-Prompt antipattern rule catalog (R001..R018+) with positive/negative samples",
   "type": "module",
+  "license": "MIT",
+  "author": "Think-Prompt contributors",
+  "homepage": "https://github.com/must-goldenrod/think-prompt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/must-goldenrod/think-prompt.git",
+    "directory": "packages/rules"
+  },
+  "bugs": {
+    "url": "https://github.com/must-goldenrod/think-prompt/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "prompt",
+    "antipattern",
+    "lint",
+    "rules"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,7 +30,16 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit"

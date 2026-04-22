@@ -12,3 +12,4 @@ coverage/
 .turbo/
 .tmp/
 packages/browser-extension/*.zip
+.dry-publish/
