@@ -1,3 +1,5 @@
+import { LOCALE_LABELS, type Locale, t } from './i18n.js';
+
 export function escapeHtml(s: unknown): string {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -7,9 +9,43 @@ export function escapeHtml(s: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
-export function layout(title: string, body: string): string {
+export interface LayoutOptions {
+  /** `reqPath` + `reqQuery` preserve current URL when switching language. */
+  reqPath?: string;
+  reqQuery?: Record<string, string>;
+  /**
+   * Opt-in live refresh. When true, the page polls the agent's latest
+   * prompt-usage id every N seconds and reloads on change. Only enabled
+   * on views whose data changes on new-prompt arrival (Overview, Prompts
+   * list) — leave off on detail pages to preserve scroll/inputs.
+   */
+  liveRefresh?: boolean;
+}
+
+export function layout(
+  title: string,
+  body: string,
+  locale: Locale = 'en',
+  opts: LayoutOptions = {}
+): string {
+  const navItems: Array<[string, keyof typeof LABEL_KEYS]> = [
+    ['/', 'nav.overview'],
+    ['/prompts', 'nav.prompts'],
+    ['/rules', 'nav.rules'],
+    ['/settings', 'nav.settings'],
+    ['/doctor', 'nav.doctor'],
+  ];
+  const navHtml = navItems
+    .map(([href, key]) => {
+      const url = appendLangParam(href, locale);
+      return `<a href="${url}" class="hover:text-blue-600">${escapeHtml(t(locale, key))}</a>`;
+    })
+    .join('');
+  const langSwitcher = renderLanguageSwitcher(locale, opts);
+  const liveScript = opts.liveRefresh ? LIVE_REFRESH_SCRIPT : '';
+
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${locale}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -29,34 +65,129 @@ export function layout(title: string, body: string): string {
   <header class="bg-white dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700">
     <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-6">
-        <a href="/" class="text-xl font-bold">Think-Prompt</a>
+        <a href="${appendLangParam('/', locale)}" class="text-xl font-bold">Think-Prompt</a>
         <nav class="text-sm flex gap-4 text-gray-600 dark:text-zinc-300">
-          <a href="/" class="hover:text-blue-600">Overview</a>
-          <a href="/prompts" class="hover:text-blue-600">Prompts</a>
-          <a href="/rules" class="hover:text-blue-600">Rules</a>
-          <a href="/settings" class="hover:text-blue-600">Settings</a>
-          <a href="/doctor" class="hover:text-blue-600">Doctor</a>
+          ${navHtml}
         </nav>
       </div>
-      <div class="text-xs text-gray-400">local-only · ${new Date().toISOString().slice(0, 10)}</div>
+      <div class="flex items-center gap-4">
+        ${langSwitcher}
+        <div class="text-xs text-gray-400">${escapeHtml(t(locale, 'footer.local_only'))} · ${new Date().toISOString().slice(0, 10)}</div>
+      </div>
     </div>
   </header>
   <main class="max-w-6xl mx-auto px-6 py-6">
 ${body}
   </main>
+  ${liveScript}
 </body>
 </html>`;
 }
 
-export function tierBadge(tier: string): string {
-  const map: Record<string, string> = {
+/**
+ * Append ?lang=<locale> to a path, preserving any existing query string.
+ * Used so the locale the user chose survives navigation.
+ */
+function appendLangParam(href: string, locale: Locale): string {
+  const [path, existingQuery = ''] = href.split('?');
+  const params = new URLSearchParams(existingQuery);
+  params.set('lang', locale);
+  return `${path}?${params.toString()}`;
+}
+
+function renderLanguageSwitcher(locale: Locale, opts: LayoutOptions): string {
+  const basePath = opts.reqPath ?? '/';
+  const passthrough = { ...(opts.reqQuery ?? {}) };
+  // Remove lang so each option can inject its own.
+  delete passthrough.lang;
+  const queryPrefix = new URLSearchParams(passthrough).toString();
+  const sep = queryPrefix ? '&' : '';
+
+  const options = (['en', 'ko', 'zh', 'es', 'ja'] as Locale[])
+    .map((code) => {
+      const url = `${basePath}?${queryPrefix}${sep}lang=${code}`;
+      const selected = code === locale ? ' selected' : '';
+      return `<option value="${escapeHtml(url)}"${selected}>${escapeHtml(LOCALE_LABELS[code])}</option>`;
+    })
+    .join('');
+
+  return `<label class="text-xs text-gray-500 flex items-center gap-2">
+    <span class="sr-only">${escapeHtml(t(locale, 'common.language'))}</span>
+    <select
+      class="text-xs border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded px-2 py-1"
+      onchange="window.location=this.value"
+      aria-label="${escapeHtml(t(locale, 'common.language'))}">
+      ${options}
+    </select>
+  </label>`;
+}
+
+/**
+ * Polls /api/overview/latest-id every 6 seconds. When the watermark changes
+ * compared to the value captured at page render, the tab reloads.
+ *
+ * The polling script is injected only when layout() is called with
+ * liveRefresh:true — typically Overview and Prompts list.
+ *
+ * Kept inline (no external JS file) to stay consistent with the "no bundler"
+ * decision (D-012). ~30 lines is acceptable.
+ */
+const LIVE_REFRESH_SCRIPT = `<script>
+(function () {
+  const INITIAL = document.documentElement.getAttribute('data-latest-id') || '';
+  const INTERVAL_MS = 6000;
+  let stopped = false;
+  async function tick() {
+    if (stopped || document.hidden) return;
+    try {
+      const r = await fetch('/api/overview/latest-id', { cache: 'no-store' });
+      if (!r.ok) return;
+      const { latestId } = await r.json();
+      if (latestId && latestId !== INITIAL) {
+        stopped = true;
+        location.reload();
+      }
+    } catch (_) {
+      // Network blip — try again next tick.
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !stopped) tick();
+  });
+  setInterval(tick, INTERVAL_MS);
+})();
+</script>`;
+
+// Used only for the typing of navItems key-list; kept here to avoid pulling
+// the whole Dictionary interface just for the nav labels.
+const LABEL_KEYS = {
+  'nav.overview': true,
+  'nav.prompts': true,
+  'nav.rules': true,
+  'nav.settings': true,
+  'nav.doctor': true,
+} as const;
+
+export function tierBadge(tier: string, locale: Locale = 'en'): string {
+  const classMap: Record<string, string> = {
     good: 'bg-green-100 text-green-800',
     ok: 'bg-yellow-100 text-yellow-800',
     weak: 'bg-orange-100 text-orange-800',
     bad: 'bg-red-100 text-red-800',
   };
-  const cls = map[tier] ?? 'bg-gray-100 text-gray-800';
-  return `<span class="inline-block px-2 py-0.5 text-xs rounded ${cls}">${escapeHtml(tier)}</span>`;
+  const cls = classMap[tier] ?? 'bg-gray-100 text-gray-800';
+  const labelKey =
+    tier === 'good'
+      ? 'tier.good'
+      : tier === 'ok'
+        ? 'tier.ok'
+        : tier === 'weak'
+          ? 'tier.weak'
+          : tier === 'bad'
+            ? 'tier.bad'
+            : 'tier.na';
+  const label = t(locale, labelKey);
+  return `<span class="inline-block px-2 py-0.5 text-xs rounded ${cls}">${escapeHtml(label)}</span>`;
 }
 
 export interface DailyBucket {
@@ -70,13 +201,12 @@ export interface DailyBucket {
 }
 
 /**
- * Inline SVG stacked bar chart — no JS, no external lib. Each bar is one day
- * and the segments (bottom-up: good → ok → weak → bad → n/a) match tierBadge
- * colors so the chart and the breakdown card read consistently.
+ * Inline SVG stacked bar chart. Each bar is one day, segments are tiers
+ * (bottom-up: good → ok → weak → bad → n/a). Daily totals sit above the bar.
  *
- * Design: the chart is layout-responsive (width 100%), uses viewBox so it
- * scales cleanly on dark/light, and labels the daily total above each bar
- * so the user never has to eyeball the segment heights.
+ * The X-axis shows every other day label when there are more than 10 bars
+ * (to avoid crowding); the full list-below-the-chart was removed at user
+ * request so the chart carries the whole daily view on its own.
  */
 export function renderDailyChart(data: DailyBucket[]): string {
   const W = 640;
@@ -91,7 +221,6 @@ export function renderDailyChart(data: DailyBucket[]): string {
   const slot = innerW / n;
   const barW = Math.max(6, Math.floor(slot * 0.7));
   const maxRaw = Math.max(1, ...data.map((d) => d.total));
-  // Round up to a "nice" axis max so y-gridlines land on integers.
   const niceMax = niceCeil(maxRaw);
   const yOf = (v: number): number => padT + innerH - (v / niceMax) * innerH;
   const xOf = (i: number): number => padL + slot * i + (slot - barW) / 2;
@@ -104,20 +233,18 @@ export function renderDailyChart(data: DailyBucket[]): string {
     na: '#9ca3af',
   } as const;
 
-  // 4 gridlines + axis
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(niceMax * t));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t0) => Math.round(niceMax * t0));
   const gridLines = ticks
     .map(
-      (t) =>
-        `<line x1="${padL}" y1="${yOf(t)}" x2="${W - padR}" y2="${yOf(t)}" stroke="currentColor" stroke-opacity="0.08" />
-         <text x="${padL - 6}" y="${yOf(t) + 3}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity="0.5">${t}</text>`
+      (tv) =>
+        `<line x1="${padL}" y1="${yOf(tv)}" x2="${W - padR}" y2="${yOf(tv)}" stroke="currentColor" stroke-opacity="0.08" />
+         <text x="${padL - 6}" y="${yOf(tv) + 3}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity="0.5">${tv}</text>`
     )
     .join('');
 
   const bars = data
     .map((d, i) => {
       const x = xOf(i);
-      // Stack bottom-up
       let runY = yOf(0);
       const seg = (value: number, color: string): string => {
         if (value <= 0) return '';
@@ -136,7 +263,6 @@ export function renderDailyChart(data: DailyBucket[]): string {
         d.total > 0
           ? `<text x="${x + barW / 2}" y="${runY - 4}" text-anchor="middle" font-size="10" font-family="ui-monospace, Menlo, monospace" fill="currentColor" fill-opacity="0.7">${d.total}</text>`
           : '';
-      // Show MM/DD every other day when >10 bars to avoid label crowding
       const showLabel = n <= 10 || i % 2 === 0 || i === n - 1;
       const [, mm, dd] = d.day.split('-');
       const dayLabel = showLabel

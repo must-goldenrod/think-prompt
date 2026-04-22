@@ -8,8 +8,9 @@ import {
   recordOutcome,
 } from '@think-prompt/core';
 import { getRulesCatalog } from '@think-prompt/rules';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { escapeHtml, layout, renderDailyChart, tierBadge } from './html.js';
+import { type Locale, resolveLocale, t } from './i18n.js';
 
 export interface DashboardDeps {
   config?: Config;
@@ -39,9 +40,47 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     }
   );
 
+  /**
+   * Resolve the locale for a request: ?lang= query → Accept-Language
+   * header → saved config.i18n → 'en'. See i18n.ts for details.
+   */
+  function reqLocale(req: FastifyRequest): Locale {
+    const accept = req.headers['accept-language'];
+    return resolveLocale(req.query, typeof accept === 'string' ? accept : undefined, config.i18n);
+  }
+
+  /** Preserved query string (minus lang) so the language switcher can round-trip. */
+  function reqQueryPassthrough(req: FastifyRequest): Record<string, string> {
+    const q = (req.query as Record<string, unknown> | null | undefined) ?? {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(q)) {
+      if (typeof v === 'string') out[k] = v;
+    }
+    return out;
+  }
+
+  /** Fresh watermark for the live-refresh poll. */
+  function latestPromptId(): string | null {
+    const row = db.prepare(`SELECT id FROM prompt_usages ORDER BY created_at DESC LIMIT 1`).get() as
+      | { id: string }
+      | undefined;
+    return row?.id ?? null;
+  }
+
+  /** Inject the current latestId so the polling script can diff it. */
+  function latestIdBootScript(id: string | null): string {
+    return `<script>document.documentElement.setAttribute('data-latest-id', ${JSON.stringify(id ?? '')});</script>`;
+  }
+
   fastify.get('/health', async () => ({ ok: true }));
 
-  fastify.get('/', async (_req, reply) => {
+  /** Live-refresh polling target — cheap, returns JSON, no HTML. */
+  fastify.get('/api/overview/latest-id', async () => {
+    return { latestId: latestPromptId() };
+  });
+
+  fastify.get('/', async (req, reply) => {
+    const locale = reqLocale(req);
     const totals = db.prepare(`SELECT COUNT(*) AS c FROM prompt_usages`).get() as { c: number };
 
     // All-time tier breakdown — force all statuses into the result even when 0.
@@ -57,12 +96,13 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       tierRows.map((r) => [r.tier, r.c])
     );
     const ALL_TIERS = ['good', 'ok', 'weak', 'bad', 'n/a'] as const;
-    const tierCounts = ALL_TIERS.map((t) => ({ tier: t, c: tierCountMap[t] ?? 0 }));
+    const tierCounts = ALL_TIERS.map((tierId) => ({
+      tier: tierId,
+      c: tierCountMap[tierId] ?? 0,
+    }));
     const tierTotal = tierCounts.reduce((acc, r) => acc + r.c, 0);
 
-    // Daily tier breakdown for the last 14 days. We compute the day axis from
-    // "today" so empty days still show up as an empty bar (easier to read
-    // than a ragged chart that skips silent days).
+    // Daily tier breakdown for the last N days.
     const DAYS = 14;
     const dailyRows = db
       .prepare(
@@ -136,41 +176,26 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
     const tierHtml = tierCounts
       .map(
-        (t) =>
-          `<div class="flex items-center gap-2"><span class="font-mono text-sm">${t.c}</span>${tierBadge(t.tier)}</div>`
+        (tc) =>
+          `<div class="flex items-center gap-2"><span class="font-mono text-sm">${tc.c}</span>${tierBadge(tc.tier, locale)}</div>`
       )
       .join('');
 
     const chartHtml = renderDailyChart(days);
-    const dailyListHtml = days
-      .map(
-        (d) =>
-          `<div class="flex items-center justify-between text-xs py-1 border-b border-gray-100 dark:border-zinc-700 last:border-0">
-             <span class="text-gray-500 font-mono">${escapeHtml(d.day)}</span>
-             <span class="flex items-center gap-2">
-               ${d.good ? `<span class="text-xs font-mono" style="color:#16a34a">${d.good}</span>` : ''}
-               ${d.ok ? `<span class="text-xs font-mono" style="color:#ca8a04">${d.ok}</span>` : ''}
-               ${d.weak ? `<span class="text-xs font-mono" style="color:#ea580c">${d.weak}</span>` : ''}
-               ${d.bad ? `<span class="text-xs font-mono" style="color:#dc2626">${d.bad}</span>` : ''}
-               ${d.na ? `<span class="text-xs font-mono" style="color:#6b7280">${d.na}</span>` : ''}
-               <span class="font-mono w-8 text-right">${d.total}</span>
-             </span>
-           </div>`
-      )
-      .join('');
 
     const body = `
-      <h1 class="text-2xl font-bold mb-6">Overview</h1>
+      ${latestIdBootScript(latestPromptId())}
+      <h1 class="text-2xl font-bold mb-6">${escapeHtml(t(locale, 'overview.title'))}</h1>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
-          <div class="text-xs text-gray-500">Total prompts</div>
+          <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'overview.total_prompts'))}</div>
           <div class="text-3xl font-mono mt-2">${totals.c}</div>
-          <div class="text-xs text-gray-400 mt-1">last ${DAYS} days: ${windowTotal}</div>
+          <div class="text-xs text-gray-400 mt-1">${escapeHtml(t(locale, 'overview.last_n_days', { n: DAYS }))}: ${windowTotal}</div>
         </div>
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
           <div class="flex items-center justify-between mb-3">
-            <div class="text-xs text-gray-500">Tier breakdown</div>
-            <div class="text-xs text-gray-400">total <span class="font-mono">${tierTotal}</span></div>
+            <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'overview.tier_breakdown'))}</div>
+            <div class="text-xs text-gray-400">${escapeHtml(t(locale, 'common.total'))} <span class="font-mono">${tierTotal}</span></div>
           </div>
           <div class="flex gap-3 flex-wrap">${tierHtml}</div>
         </div>
@@ -178,28 +203,25 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
       <section class="mb-8">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-bold">Daily additions (last ${DAYS} days)</h2>
-          <div class="text-xs text-gray-500">total <span class="font-mono">${windowTotal}</span></div>
+          <h2 class="text-lg font-bold">${escapeHtml(t(locale, 'overview.daily_additions', { n: DAYS }))}</h2>
+          <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'common.total'))} <span class="font-mono">${windowTotal}</span></div>
         </div>
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
           ${chartHtml}
-          <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-8">
-            ${dailyListHtml}
-          </div>
         </div>
       </section>
 
       <section class="mb-8">
-        <h2 class="text-lg font-bold mb-3">Lowest scoring</h2>
+        <h2 class="text-lg font-bold mb-3">${escapeHtml(t(locale, 'overview.lowest_scoring'))}</h2>
         ${
           worst.length === 0
-            ? '<div class="text-gray-400 text-sm">no scored prompts yet</div>'
+            ? `<div class="text-gray-400 text-sm">${escapeHtml(t(locale, 'overview.no_scored_yet'))}</div>`
             : `<div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700">${worst
                 .map(
                   (r) =>
-                    `<a href="/prompts/${r.id}" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
+                    `<a href="/prompts/${r.id}?lang=${locale}" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
                        <span class="font-mono text-sm w-10 text-right">${r.final_score}</span>
-                       ${tierBadge(r.tier)}
+                       ${tierBadge(r.tier, locale)}
                        <span class="text-sm text-gray-700 dark:text-zinc-200 flex-1 truncate">${escapeHtml(r.snippet)}</span>
                      </a>`
                 )
@@ -208,14 +230,14 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </section>
 
       <section>
-        <h2 class="text-lg font-bold mb-3">Recent</h2>
+        <h2 class="text-lg font-bold mb-3">${escapeHtml(t(locale, 'overview.recent'))}</h2>
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700">
           ${recent
             .map(
               (r) =>
-                `<a href="/prompts/${r.id}" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
+                `<a href="/prompts/${r.id}?lang=${locale}" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
                    <span class="font-mono text-sm w-10 text-right">${r.score >= 0 ? r.score : '-'}</span>
-                   ${tierBadge(r.tier)}
+                   ${tierBadge(r.tier, locale)}
                    <span class="text-xs text-gray-400 w-36">${escapeHtml(r.created_at)}</span>
                    <span class="text-sm text-gray-700 dark:text-zinc-200 flex-1 truncate">${escapeHtml(r.snippet)}</span>
                  </a>`
@@ -223,16 +245,23 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             .join('')}
         </div>
       </section>`;
-    reply.type('text/html; charset=utf-8').send(layout('Overview', body));
+    reply.type('text/html; charset=utf-8').send(
+      layout(t(locale, 'overview.title'), body, locale, {
+        reqPath: '/',
+        reqQuery: reqQueryPassthrough(req),
+        liveRefresh: true,
+      })
+    );
   });
 
   fastify.get('/prompts', async (req, reply) => {
-    const q = (req.query ?? {}) as Record<string, unknown>;
+    const locale = reqLocale(req);
+    const q = (req.query as Record<string, unknown> | null | undefined) ?? {};
     const tierFilter = typeof q.tier === 'string' ? q.tier : undefined;
     const ruleFilter = typeof q.rule === 'string' ? q.rule : undefined;
-    const sourceFilter = typeof q.source === 'string' && q.source ? q.source : undefined;
+    const sourceFilter = typeof q.source === 'string' && q.source.length > 0 ? q.source : undefined;
     const wheres: string[] = [];
-    const args: (string | number | null)[] = [];
+    const args: unknown[] = [];
     if (tierFilter) {
       wheres.push('qs.tier = ?');
       args.push(tierFilter);
@@ -281,45 +310,50 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     ];
 
     const body = `
-      <h1 class="text-2xl font-bold mb-4">Prompts</h1>
+      ${latestIdBootScript(latestPromptId())}
+      <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'prompts.title'))}</h1>
       <form class="mb-4 flex gap-3 text-sm flex-wrap">
+        <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
         <select name="tier" class="border rounded px-2 py-1 bg-white dark:bg-zinc-800">
-          <option value="">All tiers</option>
-          ${['good', 'ok', 'weak', 'bad']
-            .map((t) => `<option value="${t}" ${tierFilter === t ? 'selected' : ''}>${t}</option>`)
+          <option value="">${escapeHtml(t(locale, 'prompts.all_tiers'))}</option>
+          ${(['good', 'ok', 'weak', 'bad'] as const)
+            .map(
+              (tId) =>
+                `<option value="${tId}" ${tierFilter === tId ? 'selected' : ''}>${escapeHtml(t(locale, `tier.${tId === 'good' ? 'good' : tId === 'ok' ? 'ok' : tId === 'weak' ? 'weak' : 'bad'}` as 'tier.good' | 'tier.ok' | 'tier.weak' | 'tier.bad'))}</option>`
+            )
             .join('')}
         </select>
         <select name="source" class="border rounded px-2 py-1 bg-white dark:bg-zinc-800">
-          <option value="">All sources</option>
+          <option value="">${escapeHtml(t(locale, 'prompts.all_sources'))}</option>
           ${sourceOptions
             .map(
               (s) => `<option value="${s}" ${sourceFilter === s ? 'selected' : ''}>${s}</option>`
             )
             .join('')}
         </select>
-        <input name="rule" placeholder="rule id e.g. R003" value="${escapeHtml(ruleFilter ?? '')}"
+        <input name="rule" placeholder="${escapeHtml(t(locale, 'prompts.rule_placeholder'))}" value="${escapeHtml(ruleFilter ?? '')}"
                class="border rounded px-2 py-1 bg-white dark:bg-zinc-800" />
-        <button class="px-3 py-1 bg-blue-600 text-white rounded">Filter</button>
-        <a href="/prompts" class="px-3 py-1 text-gray-500">Clear</a>
+        <button class="px-3 py-1 bg-blue-600 text-white rounded">${escapeHtml(t(locale, 'prompts.filter'))}</button>
+        <a href="/prompts?lang=${locale}" class="px-3 py-1 text-gray-500">${escapeHtml(t(locale, 'prompts.clear'))}</a>
       </form>
       <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-lg shadow overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
           <tr>
-            <th class="p-2 w-16">Score</th>
-            <th class="p-2 w-20">Tier</th>
-            <th class="p-2 w-24">Source</th>
-            <th class="p-2 w-10">Hits</th>
-            <th class="p-2">Prompt</th>
-            <th class="p-2 w-40">Created</th>
+            <th class="p-2 w-16">${escapeHtml(t(locale, 'prompts.col.score'))}</th>
+            <th class="p-2 w-20">${escapeHtml(t(locale, 'prompts.col.tier'))}</th>
+            <th class="p-2 w-24">${escapeHtml(t(locale, 'prompts.col.source'))}</th>
+            <th class="p-2 w-10">${escapeHtml(t(locale, 'prompts.col.hits'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'prompts.col.prompt'))}</th>
+            <th class="p-2 w-40">${escapeHtml(t(locale, 'prompts.col.created'))}</th>
           </tr>
         </thead>
         <tbody>
           ${rows
             .map(
               (r) =>
-                `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}'">
+                `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
                    <td class="p-2 font-mono">${r.score >= 0 ? r.score : '-'}</td>
-                   <td class="p-2">${tierBadge(r.tier)}</td>
+                   <td class="p-2">${tierBadge(r.tier, locale)}</td>
                    <td class="p-2 text-xs text-gray-600 dark:text-zinc-300">${escapeHtml(r.source)}</td>
                    <td class="p-2 text-gray-500">${r.hits}</td>
                    <td class="p-2 truncate max-w-[32rem]">${escapeHtml(r.snippet)}</td>
@@ -329,10 +363,17 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             .join('')}
         </tbody>
       </table>`;
-    reply.type('text/html; charset=utf-8').send(layout('Prompts', body));
+    reply.type('text/html; charset=utf-8').send(
+      layout(t(locale, 'prompts.title'), body, locale, {
+        reqPath: '/prompts',
+        reqQuery: reqQueryPassthrough(req),
+        liveRefresh: true,
+      })
+    );
   });
 
   fastify.get('/prompts/:id', async (req, reply) => {
+    const locale = reqLocale(req);
     const { id } = req.params as { id: string };
     const u = db.prepare(`SELECT * FROM prompt_usages WHERE id=?`).get(id) as
       | {
@@ -347,7 +388,10 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         }
       | undefined;
     if (!u) {
-      reply.code(404).type('text/html').send(layout('Not found', '<p>Not found</p>'));
+      reply
+        .code(404)
+        .type('text/html')
+        .send(layout('Not found', '<p>Not found</p>', locale));
       return;
     }
     const score = db.prepare(`SELECT * FROM quality_scores WHERE usage_id=?`).get(id) as
@@ -371,20 +415,20 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       reason: string | null;
     }>;
     const fb = getOutcomeTotals(db, id);
-    const lang = u.detected_language ?? '?';
+    const detected = u.detected_language ?? '?';
 
     const body = `
-      <div class="mb-3"><a href="/prompts" class="text-blue-600 text-sm">← back</a></div>
-      <h1 class="text-2xl font-bold mb-2">Prompt ${escapeHtml(u.id.slice(-8))}</h1>
+      <div class="mb-3"><a href="/prompts?lang=${locale}" class="text-blue-600 text-sm">${escapeHtml(t(locale, 'common.back'))}</a></div>
+      <h1 class="text-2xl font-bold mb-2">${escapeHtml(t(locale, 'detail.title'))} ${escapeHtml(u.id.slice(-8))}</h1>
       <div class="text-xs text-gray-500 mb-4">
-        session <a class="underline" href="/sessions/${u.session_id}">${escapeHtml(u.session_id)}</a>
-        · ${u.char_len} chars · ${u.word_count} words · turn ${u.turn_index}
-        · <span class="uppercase">${escapeHtml(lang)}</span>
+        ${escapeHtml(t(locale, 'detail.session'))} <a class="underline" href="/sessions/${u.session_id}?lang=${locale}">${escapeHtml(u.session_id)}</a>
+        · ${u.char_len} ${escapeHtml(t(locale, 'detail.chars'))} · ${u.word_count} ${escapeHtml(t(locale, 'detail.words'))} · ${escapeHtml(t(locale, 'detail.turn'))} ${u.turn_index}
+        · <span class="uppercase">${escapeHtml(detected)}</span>
         · ${escapeHtml(u.created_at)}
       </div>
 
       <div class="mb-4 flex items-center gap-3">
-        <span class="text-xs text-gray-500">Feedback:</span>
+        <span class="text-xs text-gray-500">${escapeHtml(t(locale, 'detail.feedback'))}</span>
         <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
           <input type="hidden" name="rating" value="up" />
           <button class="px-3 py-1 rounded border border-green-300 bg-green-50 dark:bg-green-900 hover:bg-green-100 text-sm">👍 ${fb.ups}</button>
@@ -393,35 +437,35 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           <input type="hidden" name="rating" value="down" />
           <button class="px-3 py-1 rounded border border-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 text-sm">👎 ${fb.downs}</button>
         </form>
-        <span class="text-xs text-gray-400">(reprocess after session end to update usage_score)</span>
+        <span class="text-xs text-gray-400">${escapeHtml(t(locale, 'detail.reprocess_hint'))}</span>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="md:col-span-2 bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
-          <div class="text-xs text-gray-500 mb-2">Original</div>
+          <div class="text-xs text-gray-500 mb-2">${escapeHtml(t(locale, 'detail.original'))}</div>
           <pre class="text-sm">${escapeHtml(u.prompt_text)}</pre>
         </div>
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
-          <div class="text-xs text-gray-500 mb-3">Score</div>
+          <div class="text-xs text-gray-500 mb-3">${escapeHtml(t(locale, 'detail.score'))}</div>
           ${
             score
               ? `<div class="text-4xl font-mono mb-3">${score.final_score}</div>
-                 <div class="mb-3">${tierBadge(score.tier)}</div>
+                 <div class="mb-3">${tierBadge(score.tier, locale)}</div>
                  <div class="text-xs space-y-1 text-gray-600 dark:text-zinc-300">
                    <div>rule: ${score.rule_score}</div>
                    <div>usage: ${score.usage_score ?? '-'}</div>
                    <div>judge: ${score.judge_score ?? '-'}</div>
                  </div>`
-              : '<div class="text-sm text-gray-400">no score yet</div>'
+              : `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'common.no_data'))}</div>`
           }
         </div>
       </div>
 
-      <h2 class="font-bold mb-2">Rule hits</h2>
+      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.rule_hits'))}</h2>
       <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
         ${
           hits.length === 0
-            ? '<div class="p-3 text-sm text-gray-400">(no hits)</div>'
+            ? `<div class="p-3 text-sm text-gray-400">${escapeHtml(t(locale, 'detail.no_hits'))}</div>`
             : hits
                 .map(
                   (h) =>
@@ -435,13 +479,11 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         }
       </div>
 
-      <h2 class="font-bold mb-2">Suggested rewrites</h2>
+      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.suggested_rewrites'))}</h2>
       <div class="space-y-3">
         ${
           rewrites.length === 0
-            ? '<div class="text-sm text-gray-400">(none) — try: <code>think-prompt rewrite ' +
-              escapeHtml(u.id) +
-              '</code></div>'
+            ? `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'detail.rewrite_none'))}<code>think-prompt rewrite ${escapeHtml(u.id)}</code></div>`
             : rewrites
                 .map(
                   (r) =>
@@ -454,16 +496,25 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                 .join('')
         }
       </div>`;
-    reply.type('text/html; charset=utf-8').send(layout('Prompt', body));
+    reply.type('text/html; charset=utf-8').send(
+      layout(t(locale, 'detail.title'), body, locale, {
+        reqPath: `/prompts/${u.id}`,
+        reqQuery: reqQueryPassthrough(req),
+      })
+    );
   });
 
   fastify.get('/sessions/:id', async (req, reply) => {
+    const locale = reqLocale(req);
     const { id } = req.params as { id: string };
     const session = db.prepare(`SELECT * FROM sessions WHERE id=?`).get(id) as
       | { cwd: string; model: string | null; started_at: string }
       | undefined;
     if (!session) {
-      reply.code(404).type('text/html').send(layout('Not found', '<p>Not found</p>'));
+      reply
+        .code(404)
+        .type('text/html')
+        .send(layout('Not found', '<p>Not found</p>', locale));
       return;
     }
     const usages = db
@@ -500,77 +551,95 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       total_ms: number;
     }>;
     const body = `
-      <h1 class="text-2xl font-bold mb-2">Session ${escapeHtml(id.slice(-8))}</h1>
+      <h1 class="text-2xl font-bold mb-2">${escapeHtml(t(locale, 'session.title'))} ${escapeHtml(id.slice(-8))}</h1>
       <div class="text-xs text-gray-500 mb-4">
         cwd: ${escapeHtml(session.cwd)} · model: ${escapeHtml(session.model ?? '-')} · started ${escapeHtml(session.started_at)}
       </div>
 
-      <h2 class="font-bold mb-2">Turns</h2>
+      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'session.turns'))}</h2>
       <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
         ${usages
           .map(
             (u) =>
-              `<a href="/prompts/${u.id}" class="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
+              `<a href="/prompts/${u.id}?lang=${locale}" class="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
                  <span class="text-xs text-gray-400 w-8">#${u.turn_index}</span>
                  <span class="font-mono text-sm w-10 text-right">${u.score >= 0 ? u.score : '-'}</span>
-                 ${tierBadge(u.tier)}
+                 ${tierBadge(u.tier, locale)}
                  <span class="flex-1 truncate text-sm">${escapeHtml(u.snippet)}</span>
                </a>`
           )
           .join('')}
       </div>
 
-      <h2 class="font-bold mb-2">Subagents (${subs.length})</h2>
+      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'session.subagents'))} (${subs.length})</h2>
       <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
         ${
           subs.length === 0
-            ? '<div class="p-3 text-sm text-gray-400">none</div>'
+            ? `<div class="p-3 text-sm text-gray-400">${escapeHtml(t(locale, 'session.none'))}</div>`
             : subs
                 .map(
                   (s) =>
                     `<div class="p-3">
                        <div class="text-sm font-semibold">${escapeHtml(s.agent_type)} · <span class="text-gray-400 text-xs">${escapeHtml(s.agent_id)}</span></div>
                        <div class="text-xs text-gray-500 mt-1">${escapeHtml(s.status)}</div>
-                       ${s.prompt_text ? `<div class="mt-2 text-xs text-gray-600"><span class="font-semibold">prompt:</span> ${escapeHtml(s.prompt_text.slice(0, 200))}</div>` : ''}
+                       ${s.prompt_text ? `<div class="mt-2 text-xs text-gray-600"><span class="font-semibold">${escapeHtml(t(locale, 'session.prompt'))}</span> ${escapeHtml(s.prompt_text.slice(0, 200))}</div>` : ''}
                      </div>`
                 )
                 .join('')
         }
       </div>
 
-      <h2 class="font-bold mb-2">Tool use rollup</h2>
+      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'session.tool_rollup'))}</h2>
       <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-lg shadow overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
-          <tr><th class="p-2">Tool</th><th class="p-2">Calls</th><th class="p-2">Fails</th><th class="p-2">Total ms</th></tr>
+          <tr>
+            <th class="p-2">${escapeHtml(t(locale, 'session.col.tool'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'session.col.calls'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'session.col.fails'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'session.col.ms'))}</th>
+          </tr>
         </thead>
         <tbody>
           ${tools
             .map(
-              (t) =>
+              (toolRow) =>
                 `<tr class="border-t border-gray-100 dark:border-zinc-700">
-                   <td class="p-2 font-mono">${escapeHtml(t.tool_name)}</td>
-                   <td class="p-2">${t.call_count}</td>
-                   <td class="p-2 ${t.fail_count > 0 ? 'text-red-600' : ''}">${t.fail_count}</td>
-                   <td class="p-2 text-gray-500">${t.total_ms}</td>
+                   <td class="p-2 font-mono">${escapeHtml(toolRow.tool_name)}</td>
+                   <td class="p-2">${toolRow.call_count}</td>
+                   <td class="p-2 ${toolRow.fail_count > 0 ? 'text-red-600' : ''}">${toolRow.fail_count}</td>
+                   <td class="p-2 text-gray-500">${toolRow.total_ms}</td>
                  </tr>`
             )
             .join('')}
         </tbody>
       </table>`;
-    reply.type('text/html; charset=utf-8').send(layout('Session', body));
+    reply.type('text/html; charset=utf-8').send(
+      layout(t(locale, 'session.title'), body, locale, {
+        reqPath: `/sessions/${id}`,
+        reqQuery: reqQueryPassthrough(req),
+      })
+    );
   });
 
-  fastify.get('/rules', async (_req, reply) => {
+  fastify.get('/rules', async (req, reply) => {
+    const locale = reqLocale(req);
     const catalog = getRulesCatalog();
     const hitStats = db
       .prepare(`SELECT rule_id, COUNT(*) AS c FROM rule_hits GROUP BY rule_id`)
       .all() as Array<{ rule_id: string; c: number }>;
     const hitMap = Object.fromEntries(hitStats.map((h) => [h.rule_id, h.c]));
     const body = `
-      <h1 class="text-2xl font-bold mb-4">Rule catalog</h1>
+      <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'rules.title'))}</h1>
       <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-lg shadow overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
-          <tr><th class="p-2 w-16">ID</th><th class="p-2">Name</th><th class="p-2 w-24">Category</th><th class="p-2 w-16">Sev</th><th class="p-2 w-16">Hits</th><th class="p-2">Description</th></tr>
+          <tr>
+            <th class="p-2 w-16">${escapeHtml(t(locale, 'rules.col.id'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'rules.col.name'))}</th>
+            <th class="p-2 w-24">${escapeHtml(t(locale, 'rules.col.category'))}</th>
+            <th class="p-2 w-16">${escapeHtml(t(locale, 'rules.col.sev'))}</th>
+            <th class="p-2 w-16">${escapeHtml(t(locale, 'rules.col.hits'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'rules.col.description'))}</th>
+          </tr>
         </thead>
         <tbody>
         ${catalog
@@ -588,26 +657,35 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           .join('')}
         </tbody>
       </table>`;
-    reply.type('text/html; charset=utf-8').send(layout('Rules', body));
+    reply.type('text/html; charset=utf-8').send(
+      layout(t(locale, 'rules.title'), body, locale, {
+        reqPath: '/rules',
+        reqQuery: reqQueryPassthrough(req),
+      })
+    );
   });
 
-  fastify.get('/settings', async (_req, reply) => {
+  fastify.get('/settings', async (req, reply) => {
+    const locale = reqLocale(req);
     const body = `
-      <h1 class="text-2xl font-bold mb-4">Settings</h1>
-      <p class="text-sm text-gray-600 dark:text-zinc-300 mb-4">
-        Edit <code>~/.think-prompt/config.json</code> or use the CLI:
-      </p>
+      <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'settings.title'))}</h1>
+      <p class="text-sm text-gray-600 dark:text-zinc-300 mb-4">${escapeHtml(t(locale, 'settings.edit_hint'))}</p>
       <pre class="bg-gray-100 dark:bg-zinc-800 rounded p-4 text-sm">think-prompt config list
 think-prompt config set agent.coach_mode true
 think-prompt config set llm.enabled true
 think-prompt coach on</pre>
-      <h2 class="font-bold mt-6 mb-2">Current config (read-only)</h2>
+      <h2 class="font-bold mt-6 mb-2">${escapeHtml(t(locale, 'settings.config_readonly'))}</h2>
       <pre class="bg-gray-100 dark:bg-zinc-800 rounded p-4 text-xs overflow-auto">${escapeHtml(JSON.stringify(config, null, 2))}</pre>`;
-    reply.type('text/html; charset=utf-8').send(layout('Settings', body));
+    reply.type('text/html; charset=utf-8').send(
+      layout(t(locale, 'settings.title'), body, locale, {
+        reqPath: '/settings',
+        reqQuery: reqQueryPassthrough(req),
+      })
+    );
   });
 
-  fastify.get('/doctor', async (_req, reply) => {
-    // Simple doctor-like view
+  fastify.get('/doctor', async (req, reply) => {
+    const locale = reqLocale(req);
     const agentPid = db.prepare(`SELECT value FROM _meta WHERE key='installed_at'`).get() as
       | { value: string }
       | undefined;
@@ -628,9 +706,9 @@ think-prompt coach on</pre>
       rewrites: number;
     };
     const body = `
-      <h1 class="text-2xl font-bold mb-4">Doctor</h1>
+      <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'doctor.title'))}</h1>
       <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4 mb-4">
-        <h2 class="font-bold mb-2">Counts</h2>
+        <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'doctor.counts'))}</h2>
         <ul class="text-sm space-y-1">
           <li>prompt_usages: ${counts.usages}</li>
           <li>sessions: ${counts.sessions}</li>
@@ -640,10 +718,15 @@ think-prompt coach on</pre>
         </ul>
       </div>
       <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
-        <h2 class="font-bold mb-2">Installed</h2>
+        <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'doctor.installed'))}</h2>
         <p class="text-sm text-gray-500">${escapeHtml(agentPid?.value ?? 'unknown')}</p>
       </div>`;
-    reply.type('text/html; charset=utf-8').send(layout('Doctor', body));
+    reply.type('text/html; charset=utf-8').send(
+      layout(t(locale, 'doctor.title'), body, locale, {
+        reqPath: '/doctor',
+        reqQuery: reqQueryPassthrough(req),
+      })
+    );
   });
 
   // POST /prompts/:id/feedback — form-encoded {rating: up|down, note?}
@@ -666,7 +749,6 @@ think-prompt coach on</pre>
       return;
     }
     recordOutcome(db, id, rating, body.note ?? null);
-    // Redirect back to the detail page
     reply.redirect(`/prompts/${id}`);
   });
 
