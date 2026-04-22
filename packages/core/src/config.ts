@@ -43,7 +43,7 @@ export const ConfigSchema = z.object({
       custom_disabled: z.array(z.string()).default([]),
     })
     .default({}),
-  i18n: z.enum(['ko', 'en']).default('ko'),
+  i18n: z.enum(['ko', 'en', 'zh', 'es', 'ja']).default('ko'),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
