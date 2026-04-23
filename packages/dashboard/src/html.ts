@@ -31,7 +31,6 @@ export function layout(
   const navItems: Array<[string, keyof typeof LABEL_KEYS]> = [
     ['/', 'nav.overview'],
     ['/prompts', 'nav.prompts'],
-    ['/rules', 'nav.rules'],
     ['/settings', 'nav.settings'],
     ['/doctor', 'nav.doctor'],
   ];
