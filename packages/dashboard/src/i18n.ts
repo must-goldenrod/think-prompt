@@ -80,8 +80,12 @@ export interface Dictionary {
   'detail.score': string;
   'detail.rule_hits': string;
   'detail.no_hits': string;
+  'detail.no_issues_found': string;
   'detail.suggested_rewrites': string;
   'detail.rewrite_none': string;
+  'detail.rewrite_cta': string;
+  'detail.rewritten': string;
+  'detail.previous_rewrites': string;
 
   /* session */
   'session.title': string;
@@ -185,10 +189,14 @@ const EN: Dictionary = {
   'detail.reprocess_hint': '(reprocess after session end to update usage_score)',
   'detail.original': 'Original',
   'detail.score': 'Score',
-  'detail.rule_hits': 'Rule hits',
-  'detail.no_hits': '(no hits)',
-  'detail.suggested_rewrites': 'Suggested rewrites',
-  'detail.rewrite_none': '(none) — try: ',
+  'detail.rule_hits': 'What went wrong',
+  'detail.no_hits': 'No issues detected — this prompt passed every rule.',
+  'detail.no_issues_found': 'No issues detected — this prompt passed every rule.',
+  'detail.suggested_rewrites': 'Suggested rewrite',
+  'detail.rewrite_none': 'No rewrite yet. Generate one with the command on the right.',
+  'detail.rewrite_cta': 'Generate an improved version:',
+  'detail.rewritten': 'Improved',
+  'detail.previous_rewrites': 'Previous rewrites',
 
   'session.title': 'Session',
   'session.turns': 'Turns',
@@ -287,10 +295,14 @@ const KO: Dictionary = {
   'detail.reprocess_hint': '(세션 종료 후 재처리해야 usage_score 반영)',
   'detail.original': '원문',
   'detail.score': '점수',
-  'detail.rule_hits': '룰 히트',
-  'detail.no_hits': '(히트 없음)',
-  'detail.suggested_rewrites': '개선 제안',
-  'detail.rewrite_none': '(없음) — 다음을 실행: ',
+  'detail.rule_hits': '무엇이 약한가',
+  'detail.no_hits': '발견된 이슈 없음 — 이 프롬프트는 모든 룰을 통과했습니다.',
+  'detail.no_issues_found': '발견된 이슈 없음 — 이 프롬프트는 모든 룰을 통과했습니다.',
+  'detail.suggested_rewrites': '개선안',
+  'detail.rewrite_none': '아직 개선안이 없습니다. 오른쪽 명령으로 생성하세요.',
+  'detail.rewrite_cta': '개선된 버전 받기:',
+  'detail.rewritten': '개선안',
+  'detail.previous_rewrites': '이전 개선안',
 
   'session.title': '세션',
   'session.turns': '턴',
@@ -389,10 +401,14 @@ const ZH: Dictionary = {
   'detail.reprocess_hint': '(会话结束后重新处理以更新 usage_score)',
   'detail.original': '原文',
   'detail.score': '得分',
-  'detail.rule_hits': '规则命中',
-  'detail.no_hits': '(无命中)',
+  'detail.rule_hits': '问题所在',
+  'detail.no_hits': '未发现问题 — 此提示通过了所有规则。',
+  'detail.no_issues_found': '未发现问题 — 此提示通过了所有规则。',
   'detail.suggested_rewrites': '改写建议',
-  'detail.rewrite_none': '(无) — 请尝试: ',
+  'detail.rewrite_none': '暂无改写。使用右侧命令生成。',
+  'detail.rewrite_cta': '生成改进版本:',
+  'detail.rewritten': '改写后',
+  'detail.previous_rewrites': '历史改写',
 
   'session.title': '会话',
   'session.turns': '回合',
@@ -491,10 +507,14 @@ const ES: Dictionary = {
   'detail.reprocess_hint': '(reprocesar al finalizar la sesión para actualizar usage_score)',
   'detail.original': 'Original',
   'detail.score': 'Puntuación',
-  'detail.rule_hits': 'Reglas disparadas',
-  'detail.no_hits': '(sin aciertos)',
-  'detail.suggested_rewrites': 'Reescrituras sugeridas',
-  'detail.rewrite_none': '(ninguna) — probar: ',
+  'detail.rule_hits': 'Qué salió mal',
+  'detail.no_hits': 'Sin problemas detectados — este prompt pasó todas las reglas.',
+  'detail.no_issues_found': 'Sin problemas detectados — este prompt pasó todas las reglas.',
+  'detail.suggested_rewrites': 'Reescritura sugerida',
+  'detail.rewrite_none': 'Aún no hay reescritura. Genera una con el comando de la derecha.',
+  'detail.rewrite_cta': 'Generar versión mejorada:',
+  'detail.rewritten': 'Mejorado',
+  'detail.previous_rewrites': 'Reescrituras anteriores',
 
   'session.title': 'Sesión',
   'session.turns': 'Turnos',
@@ -593,10 +613,15 @@ const JA: Dictionary = {
   'detail.reprocess_hint': '(セッション終了後に再処理すると usage_score が更新されます)',
   'detail.original': '原文',
   'detail.score': 'スコア',
-  'detail.rule_hits': 'ルールヒット',
-  'detail.no_hits': '(ヒットなし)',
-  'detail.suggested_rewrites': '改善提案',
-  'detail.rewrite_none': '(なし) — 実行: ',
+  'detail.rule_hits': '弱点',
+  'detail.no_hits': '問題は検出されませんでした — このプロンプトはすべてのルールを通過しました。',
+  'detail.no_issues_found':
+    '問題は検出されませんでした — このプロンプトはすべてのルールを通過しました。',
+  'detail.suggested_rewrites': '改善案',
+  'detail.rewrite_none': '改善案はまだありません。右のコマンドで生成してください。',
+  'detail.rewrite_cta': '改善版を生成:',
+  'detail.rewritten': '改善後',
+  'detail.previous_rewrites': '以前の改善案',
 
   'session.title': 'セッション',
   'session.turns': 'ターン',

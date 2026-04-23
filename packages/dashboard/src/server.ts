@@ -22,6 +22,7 @@ import {
   tierBadge,
 } from './html.js';
 import { type Locale, resolveLocale, t } from './i18n.js';
+import { getRuleExampleKo } from './rule-examples.js';
 
 export interface DashboardDeps {
   config?: Config;
@@ -524,88 +525,165 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const consentState = currentConfig.analysis.deep_consent;
     const analyzeEnabled = currentConfig.llm.enabled && consentState === 'granted';
 
+    // ----- Build a one-line diagnosis from the top 2 hits (highest severity) -----
+    // The rule engine already sorted hits DESC by severity. Take the first
+    // two messages and join with " · " — one compact sentence that explains
+    // WHY this score, which is what the user most needs above the fold.
+    const topHits = hits.slice(0, 2);
+    const diagnosisLine =
+      topHits.length === 0
+        ? t(locale, 'detail.no_issues_found')
+        : topHits.map((h) => h.message.trim()).join(' · ');
+
+    // ----- Severity → color class for the left accent bar of lesson cards --
+    const sevBar = (sev: number): string => {
+      if (sev >= 3) return 'bg-red-500';
+      if (sev === 2) return 'bg-orange-500';
+      return 'bg-yellow-500';
+    };
+    const sevTextCls = (sev: number): string => {
+      if (sev >= 3) return 'text-red-700 dark:text-red-300';
+      if (sev === 2) return 'text-orange-700 dark:text-orange-300';
+      return 'text-yellow-700 dark:text-yellow-300';
+    };
+
+    // Each rule hit renders as a lesson card: severity bar on the left, rule
+    // id + severity + message up top, then the Korean bad→good example
+    // inline (KO locale only — other locales get a rule-catalog deep-link).
+    const ruleCards =
+      hits.length === 0
+        ? `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4 text-sm text-gray-400">${escapeHtml(t(locale, 'detail.no_hits'))}</div>`
+        : hits
+            .map((h) => {
+              const ex = locale === 'ko' ? getRuleExampleKo(h.rule_id) : null;
+              const exampleBlock = ex
+                ? `<div class="mt-3 pt-3 border-t border-gray-100 dark:border-zinc-700 space-y-1.5 text-sm">
+                     <div><span class="inline-block w-14 text-xs font-mono uppercase tracking-widest text-gray-500">약한 예</span><span class="text-gray-700 dark:text-zinc-200">${escapeHtml(ex.bad)}</span></div>
+                     <div><span class="inline-block w-14 text-xs font-mono uppercase tracking-widest text-gray-500">강한 예</span><span class="text-gray-700 dark:text-zinc-200">${escapeHtml(ex.good)}</span></div>
+                     ${ex.tip ? `<div class="mt-2 text-xs text-gray-500 italic">💡 ${escapeHtml(ex.tip)}</div>` : ''}
+                   </div>`
+                : '';
+              return `
+                <div class="relative bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
+                  <div class="absolute left-0 top-0 h-full w-1 ${sevBar(h.severity)}"></div>
+                  <div class="p-4 pl-5">
+                    <div class="flex items-center gap-3 mb-1.5">
+                      <span class="font-mono text-sm font-semibold ${sevTextCls(h.severity)}">${escapeHtml(h.rule_id)}</span>
+                      <span class="text-[10px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300">SEV ${h.severity}</span>
+                    </div>
+                    <div class="text-sm text-gray-800 dark:text-zinc-100">${escapeHtml(h.message)}</div>
+                    ${exampleBlock}
+                  </div>
+                </div>`;
+            })
+            .join('');
+
+    // The latest rewrite (if any) lives next to the original; anything older
+    // is shown below in the "previous rewrites" list.
+    const latestRewrite = rewrites[0];
+    const olderRewrites = rewrites.slice(1);
+
     const body = `
       <div class="mb-3"><a href="/prompts?lang=${locale}" class="text-accent text-sm hover:underline">${escapeHtml(t(locale, 'common.back'))}</a></div>
-      <h1 class="text-2xl font-bold mb-2">${escapeHtml(t(locale, 'detail.title'))} ${escapeHtml(u.id.slice(-8))}</h1>
-      <div class="text-xs text-gray-500 mb-4">
-        ${escapeHtml(t(locale, 'detail.session'))} <a class="underline" href="/sessions/${u.session_id}?lang=${locale}">${escapeHtml(u.session_id)}</a>
-        · ${u.char_len} ${escapeHtml(t(locale, 'detail.chars'))} · ${u.word_count} ${escapeHtml(t(locale, 'detail.words'))} · ${escapeHtml(t(locale, 'detail.turn'))} ${u.turn_index}
-        · <span class="uppercase">${escapeHtml(detected)}</span>
-        · ${escapeHtml(u.created_at)}
-      </div>
 
-      <div class="mb-4 flex items-center gap-3">
-        <span class="text-xs text-gray-500">${escapeHtml(t(locale, 'detail.feedback'))}</span>
-        <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
-          <input type="hidden" name="rating" value="up" />
-          <button class="px-3 py-1 rounded border border-green-300 bg-green-50 dark:bg-green-900 hover:bg-green-100 text-sm">👍 ${fb.ups}</button>
-        </form>
-        <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
-          <input type="hidden" name="rating" value="down" />
-          <button class="px-3 py-1 rounded border border-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 text-sm">👎 ${fb.downs}</button>
-        </form>
-        <span class="text-xs text-gray-400">${escapeHtml(t(locale, 'detail.reprocess_hint'))}</span>
-      </div>
+      <!-- HERO · Score + one-line diagnosis + primary CTA -->
+      <section class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm p-6 mb-6">
+        <div class="flex items-start gap-5 flex-wrap">
+          <div class="flex items-baseline gap-2">
+            <div class="text-5xl font-mono font-semibold">${score ? score.final_score : '—'}</div>
+            <div class="text-sm text-gray-400 font-mono">/100</div>
+          </div>
+          <div class="flex-1 min-w-[16rem]">
+            <div class="mb-2">${score ? tierBadge(score.tier, locale) : ''}</div>
+            <div class="text-sm text-gray-700 dark:text-zinc-200 leading-relaxed">${escapeHtml(diagnosisLine)}</div>
+          </div>
+        </div>
+        <div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 flex items-center gap-3 flex-wrap">
+          <span class="text-xs text-gray-500">${escapeHtml(t(locale, 'detail.rewrite_cta'))}</span>
+          <code class="text-xs bg-gray-100 dark:bg-zinc-900 rounded px-2 py-1 font-mono text-gray-700 dark:text-zinc-200">think-prompt rewrite ${escapeHtml(u.id)}</code>
+          ${score ? `<span class="text-xs text-gray-400 ml-auto">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'}</span>` : ''}
+        </div>
+      </section>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="md:col-span-2 bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-          <div class="text-xs text-gray-500 mb-2">${escapeHtml(t(locale, 'detail.original'))}</div>
+      <!-- ORIGINAL vs REWRITTEN -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold mb-2">${escapeHtml(t(locale, 'detail.original'))}</div>
           <pre class="text-sm">${escapeHtml(u.prompt_text)}</pre>
         </div>
         <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-          <div class="text-xs text-gray-500 mb-3">${escapeHtml(t(locale, 'detail.score'))}</div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold mb-2">${escapeHtml(t(locale, 'detail.rewritten'))}</div>
           ${
-            score
-              ? `<div class="text-4xl font-mono mb-3">${score.final_score}</div>
-                 <div class="mb-3">${tierBadge(score.tier, locale)}</div>
-                 <div class="text-xs space-y-1 text-gray-600 dark:text-zinc-300">
-                   <div>rule: ${score.rule_score}</div>
-                   <div>usage: ${score.usage_score ?? '-'}</div>
-                   <div>judge: ${score.judge_score ?? '-'}</div>
-                 </div>`
-              : `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'common.no_data'))}</div>`
+            latestRewrite
+              ? `<pre class="text-sm">${escapeHtml(latestRewrite.after_text)}</pre>
+                 <div class="mt-2 text-xs text-gray-500">${escapeHtml(latestRewrite.status)} · ${escapeHtml(latestRewrite.created_at)}</div>
+                 ${latestRewrite.reason ? `<div class="mt-1 text-xs text-gray-500 italic">${escapeHtml(latestRewrite.reason)}</div>` : ''}`
+              : `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'detail.rewrite_none'))}</div>`
           }
         </div>
-      </div>
+      </section>
 
-      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.rule_hits'))}</h2>
-      <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
-        ${
-          hits.length === 0
-            ? `<div class="p-3 text-sm text-gray-400">${escapeHtml(t(locale, 'detail.no_hits'))}</div>`
-            : hits
-                .map(
-                  (h) =>
-                    `<div class="p-3 flex items-start gap-3">
-                       <span class="font-mono text-sm text-yellow-700">${escapeHtml(h.rule_id)}</span>
-                       <span class="text-xs text-gray-500">sev ${h.severity}</span>
-                       <span class="text-sm flex-1">${escapeHtml(h.message)}</span>
-                     </div>`
-                )
-                .join('')
-        }
-      </div>
+      <!-- WHAT WENT WRONG · rule hits as lesson cards -->
+      <section class="mb-6">
+        <h2 class="font-bold mb-3 flex items-center gap-2">
+          ${escapeHtml(t(locale, 'detail.rule_hits'))}
+          <span class="text-xs font-normal text-gray-500 font-mono">${hits.length}</span>
+        </h2>
+        <div class="space-y-3">
+          ${ruleCards}
+        </div>
+      </section>
 
-      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.suggested_rewrites'))}</h2>
-      <div class="space-y-3 mb-6">
-        ${
-          rewrites.length === 0
-            ? `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'detail.rewrite_none'))}<code>think-prompt rewrite ${escapeHtml(u.id)}</code></div>`
-            : rewrites
-                .map(
-                  (r) =>
-                    `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-                       <div class="text-xs text-gray-500 mb-2">${escapeHtml(r.status)} · ${escapeHtml(r.created_at)}</div>
-                       <pre class="text-sm">${escapeHtml(r.after_text)}</pre>
-                       ${r.reason ? `<div class="mt-2 text-xs text-gray-500 italic">${escapeHtml(r.reason)}</div>` : ''}
-                     </div>`
-                )
-                .join('')
-        }
-      </div>
+      ${
+        olderRewrites.length > 0
+          ? `<section class="mb-6">
+              <h2 class="font-bold mb-3">${escapeHtml(t(locale, 'detail.previous_rewrites'))}</h2>
+              <div class="space-y-3">
+                ${olderRewrites
+                  .map(
+                    (r) =>
+                      `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
+                         <div class="text-xs text-gray-500 mb-2">${escapeHtml(r.status)} · ${escapeHtml(r.created_at)}</div>
+                         <pre class="text-sm">${escapeHtml(r.after_text)}</pre>
+                         ${r.reason ? `<div class="mt-2 text-xs text-gray-500 italic">${escapeHtml(r.reason)}</div>` : ''}
+                       </div>`
+                  )
+                  .join('')}
+              </div>
+            </section>`
+          : ''
+      }
 
-      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.deep_analysis'))}</h2>
-      ${renderDeepAnalysisSection(u.id, locale, consentState, currentConfig.llm.enabled, analyzeEnabled, deepAnalyses)}`;
+      <!-- DEEP ANALYSIS -->
+      <section class="mb-6">
+        <h2 class="font-bold mb-3">${escapeHtml(t(locale, 'detail.deep_analysis'))}</h2>
+        ${renderDeepAnalysisSection(u.id, locale, consentState, currentConfig.llm.enabled, analyzeEnabled, deepAnalyses)}
+      </section>
+
+      <!-- FEEDBACK · demoted below main content so users rate AFTER reading -->
+      <section class="mb-6 pt-4 border-t border-gray-100 dark:border-zinc-700 flex items-center gap-3 flex-wrap">
+        <span class="text-xs text-gray-500">${escapeHtml(t(locale, 'detail.feedback'))}</span>
+        <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
+          <input type="hidden" name="rating" value="up" />
+          <button class="px-3 py-1 rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 text-sm transition-colors">👍 ${fb.ups}</button>
+        </form>
+        <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
+          <input type="hidden" name="rating" value="down" />
+          <button class="px-3 py-1 rounded-lg border border-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-sm transition-colors">👎 ${fb.downs}</button>
+        </form>
+        <span class="text-xs text-gray-400">${escapeHtml(t(locale, 'detail.reprocess_hint'))}</span>
+      </section>
+
+      <!-- META · debugging info, collapsed by default -->
+      <details class="text-xs text-gray-500">
+        <summary class="cursor-pointer select-none hover:text-accent">${escapeHtml(t(locale, 'detail.title'))} ${escapeHtml(u.id.slice(-8))}</summary>
+        <div class="mt-2 pl-4 space-y-1 font-mono">
+          <div>id: ${escapeHtml(u.id)}</div>
+          <div>${escapeHtml(t(locale, 'detail.session'))}: <a class="underline hover:text-accent" href="/sessions/${u.session_id}?lang=${locale}">${escapeHtml(u.session_id)}</a></div>
+          <div>${u.char_len} ${escapeHtml(t(locale, 'detail.chars'))} · ${u.word_count} ${escapeHtml(t(locale, 'detail.words'))} · ${escapeHtml(t(locale, 'detail.turn'))} ${u.turn_index} · <span class="uppercase">${escapeHtml(detected)}</span></div>
+          <div>${escapeHtml(u.created_at)}</div>
+        </div>
+      </details>`;
     reply.type('text/html; charset=utf-8').send(
       layout(t(locale, 'detail.title'), body, locale, {
         reqPath: `/prompts/${u.id}`,

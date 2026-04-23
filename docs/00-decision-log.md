@@ -352,6 +352,36 @@
 
 ---
 
+## D-040 · 프롬프트 디테일 페이지 = "코칭 세션"으로 재프레이밍
+
+- **Date:** 2026-04-23
+- **Problem:** 기존 `/prompts/:id` 가 DB 쿼리 결과를 8개 섹션으로 나열하는 뷰에 가까웠다. 유저 체감: "점수는 보이는데 왜 이런 점수인지, 뭘 고쳐야 하는지가 한눈에 안 들어온다." D-032 미션("인지 고착·프롬프트 자각 해소") 서피스에서 가장 직접적인 코칭 표면이 약하게 작동 중이었음.
+- **Decision:** 디테일 페이지를 **코칭 세션** 구조로 재배치. 유저의 학습 여정(Score → Why → How) 을 따라가도록 섹션을 재배열하고, 룰 히트를 "라벨 + 메시지" 에서 "bad→good 예시를 포함한 lesson 카드" 로 격상.
+  - **Hero 섹션**: `text-5xl font-mono` 큰 점수 + tier 배지 + **한 줄 진단**(top 2 룰 히트 메시지 ` · ` 조인) + rewrite CLI 명령 + 서브 스코어(rule/usage/judge) 한 줄. above-the-fold 에서 진단 완결.
+  - **Original vs Rewritten 2-col**: 최신 rewrite 를 원문 옆에 비교 배치. rewrite 없으면 동일 스타일의 빈 상태 카드(기존의 "CLI 쳐" 빈 여백을 대체).
+  - **Rule hits = lesson 카드**: 각 카드에 severity 좌측 컬러 바(3 red / 2 orange / 1 yellow) + `R004` + `SEV 3` 배지 + 메시지 + **KO 로케일 한정** 약한 예 / 강한 예 / Tip. 예시 데이터는 `packages/dashboard/src/rule-examples.ts` 에 18개 룰 한국어 카피로 내장.
+  - **이전 rewrites**: 있으면 별도 섹션으로 분리.
+  - **Deep analysis**: 기존 그대로 섹션 유지(LLM OFF 안내가 주) 하되 순서만 하단으로 이동.
+  - **Feedback 👍👎**: 유저가 진단을 읽은 뒤 찍도록 페이지 **하단** 으로 이동.
+  - **Meta strip**: `<details>` 로 기본 접힘. 유저가 id/session/chars 를 보고 싶을 때만 펼침.
+- **Rationale:**
+  - "점수 → 왜 이 점수 → 어떻게 고칠지" 흐름이 스크롤 축이 되어야 함.
+  - "라벨만 뿌리는" rule hit 에 유저가 개선 행동으로 옮길 hook 이 없었음 → bad→good 예시 한 쌍이 구체 행동을 제공.
+  - Rewrites / Deep analysis 의 "빈 상태" 가 세 곳에서 같은 "CLI 쳐서 활성화" 패턴으로 반복 → rewrite 는 첫 카드로 중요 행동에 올림, deep analysis 는 하단에 유지해 덜 중요한 보조 기능으로 자리매김.
+  - Feedback 을 위로 두면 "평가" 가 "학습" 보다 앞서는 이상한 동선 → 내린다.
+- **Scope:**
+  - **신규 파일**: `packages/dashboard/src/rule-examples.ts` (R001~R018 한국어 예시 18건 + getter).
+  - **i18n**: 5개 언어 × 4 신규 키 (`detail.no_issues_found`, `detail.rewrite_cta`, `detail.rewritten`, `detail.previous_rewrites`) + 4 기존 키 값 개정 (`detail.rule_hits` · `no_hits` · `suggested_rewrites` · `rewrite_none`).
+  - **server.ts** 디테일 핸들러 body 전면 재구성.
+  - **테스트** 4건 추가: 히어로 빅 스코어·rewrite CLI, severity 컬러 바 + KO 예시, Original/Rewritten 2-col + 빈 상태 카피, meta `<details>` 접힘.
+- **Known limits:**
+  - rule-examples 는 **한국어만**. 다른 4개 로케일에서는 예시 블록이 생략되고 메시지만 표시. 영어 번역은 후속 PR.
+  - 한 줄 진단이 top 2 히트 메시지 ` · ` 조인이라 3개 이상 히트일 때 "+ N 더" 같은 힌트가 아직 없음. rule_hits 가 10개 넘는 프롬프트에선 보완 필요.
+  - 룰 ID 가 rule-examples 에 없는 경우(예: 신규 룰 R019 가 나왔는데 예시 누락) 자동 fallback 으로 예시 블록 스킵 — 에러 아님.
+- **관계:** D-032(미션), D-036(rules 나비 숨김 — 여전히 라우트 살아있어 이번 lesson 카드가 후일 `/rules#R004` 같은 딥링크 허브로 연결 가능), D-038(emerald/ink 팔레트와 lesson 카드 스타일 정합).
+
+---
+
 ## 취소된 결정
 
 ### D-037 · 대시보드 브랜드 토큰 통일 (로컬 `site/` 기반, indigo)
