@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Think-Prompt — a local-first Claude Code prompt coach</title>
+  <meta name="description" content="See which of your Claude Code prompts actually work. 18 antipattern rules, 5-language dashboard, opt-in LLM deep analysis. Local-first — prompts never leave your machine." />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Think-Prompt — local-first Claude Code prompt coach" />
+  <meta property="og:description" content="Score every Claude Code prompt against 18 antipattern rules. Runs entirely on your machine." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://think-prompt.dev" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Tailwind CDN (same philosophy as the dashboard, D-012: no bundler) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: '#0b0d12',
+            accent: '#6366f1',
+            good: '#22c55e',
+            ok: '#eab308',
+            weak: '#f97316',
+            bad: '#ef4444',
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Inter', 'sans-serif'],
+            mono: ['ui-monospace', 'SF Mono', 'Menlo', 'Monaco', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="bg-white text-ink antialiased">
+
+  <!-- NAV -->
+  <header class="border-b border-gray-100">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 font-bold text-lg">
+        <span class="inline-block w-2 h-2 rounded-full bg-accent"></span>
+        Think-Prompt
+      </a>
+      <nav class="text-sm flex gap-6 text-gray-600">
+        <a href="#features" class="hover:text-ink">Features</a>
+        <a href="#privacy" class="hover:text-ink">Privacy</a>
+        <a href="https://github.com/must-goldenrod/think-prompt" class="hover:text-ink">GitHub</a>
+        <a href="https://github.com/must-goldenrod/think-prompt/tree/main/docs" class="hover:text-ink">Docs</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="max-w-5xl mx-auto px-6 pt-20 pb-16">
+    <div class="text-xs font-mono text-accent mb-4 tracking-widest uppercase">Local-first · MIT · v0.1.0</div>
+    <h1 class="text-5xl md:text-6xl font-bold tracking-tight leading-[1.05] mb-6">
+      See which of your<br />
+      Claude Code prompts<br />
+      <span class="text-accent">actually work.</span>
+    </h1>
+    <p class="text-xl text-gray-600 max-w-2xl mb-10 leading-relaxed">
+      Think-Prompt scores every prompt you send in Claude Code against 18 antipattern rules, shows a tiered dashboard, and — with your consent — runs a deep LLM analysis to diagnose what's wrong and rewrite it.
+      <strong class="text-ink">Runs entirely on your machine.</strong>
+    </p>
+
+    <!-- Install command block with copy button -->
+    <div class="max-w-xl">
+      <div class="flex items-center gap-2 bg-ink text-gray-100 rounded-lg px-5 py-4 font-mono text-sm shadow-lg">
+        <span class="text-gray-500 select-none">$</span>
+        <code id="install-cmd" class="flex-1 overflow-x-auto whitespace-nowrap">npm install -g @think-prompt/cli</code>
+        <button
+          onclick="copyInstall()"
+          class="ml-3 px-3 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition-colors"
+          aria-label="Copy install command">
+          <span id="copy-label">Copy</span>
+        </button>
+      </div>
+      <div class="flex gap-4 mt-4 text-sm text-gray-500 font-mono">
+        <code>think-prompt install</code>
+        <span>→</span>
+        <code>think-prompt open</code>
+      </div>
+    </div>
+
+    <!-- Placeholder for demo — real GIF drops in before v0.1.0 launch -->
+    <div class="mt-16 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-10 shadow-sm">
+      <div class="text-center text-gray-400 text-sm font-mono mb-4">[ 30-second demo placeholder ]</div>
+      <div class="grid grid-cols-5 gap-2 max-w-md mx-auto">
+        <div class="h-14 bg-good rounded" title="good"></div>
+        <div class="h-14 bg-ok rounded" title="ok"></div>
+        <div class="h-14 bg-weak rounded" title="weak"></div>
+        <div class="h-14 bg-bad rounded" title="bad"></div>
+        <div class="h-14 bg-gray-300 rounded" title="n/a"></div>
+      </div>
+      <div class="text-center text-xs text-gray-500 mt-3 font-mono">good · ok · weak · bad · n/a</div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="max-w-5xl mx-auto px-6 py-16">
+    <h2 class="text-3xl font-bold mb-2">What's in it</h2>
+    <p class="text-gray-600 mb-12">Four things, no fluff.</p>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <!-- Feature 1 -->
+      <div class="border border-gray-200 rounded-xl p-6 hover:border-accent hover:shadow-md transition-all">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-mono text-sm">1</span>
+          <h3 class="font-bold text-lg">Auto capture</h3>
+        </div>
+        <p class="text-gray-600 leading-relaxed">
+          Installs as a Claude Code hook and quietly records every prompt you send, every subagent you dispatch, every tool call outcome — into a SQLite file at <code class="text-xs bg-gray-100 rounded px-1.5 py-0.5">~/.think-prompt/prompts.db</code>.
+        </p>
+      </div>
+
+      <!-- Feature 2 -->
+      <div class="border border-gray-200 rounded-xl p-6 hover:border-accent hover:shadow-md transition-all">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-mono text-sm">2</span>
+          <h3 class="font-bold text-lg">18 antipattern rules</h3>
+        </div>
+        <p class="text-gray-600 leading-relaxed">
+          R001 <em>too short</em> · R002 <em>no output format</em> · R003 <em>no context</em> · R004 <em>multi-task</em> · R010 <em>no constraint</em> … deterministic scoring with explanations you can actually debug.
+        </p>
+      </div>
+
+      <!-- Feature 3 -->
+      <div class="border border-gray-200 rounded-xl p-6 hover:border-accent hover:shadow-md transition-all">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-mono text-sm">3</span>
+          <h3 class="font-bold text-lg">Deep analysis (opt-in)</h3>
+        </div>
+        <p class="text-gray-600 leading-relaxed">
+          With your explicit consent, send the PII-masked prompt to Claude Haiku. Get back categorized problems, step-by-step reasoning, and a rewrite. Stored locally; used nowhere else.
+        </p>
+      </div>
+
+      <!-- Feature 4 -->
+      <div class="border border-gray-200 rounded-xl p-6 hover:border-accent hover:shadow-md transition-all">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-mono text-sm">4</span>
+          <h3 class="font-bold text-lg">Backfill history</h3>
+        </div>
+        <p class="text-gray-600 leading-relaxed">
+          One command imports every prompt from <code class="text-xs bg-gray-100 rounded px-1.5 py-0.5">~/.claude/projects</code> — often 10,000+ prompts going back months. Dedup via hash; rule-scored on the way in.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIVACY -->
+  <section id="privacy" class="bg-gradient-to-br from-gray-50 to-white py-20">
+    <div class="max-w-5xl mx-auto px-6">
+      <h2 class="text-3xl font-bold mb-2">Your prompts, your machine</h2>
+      <p class="text-gray-600 mb-10">Three promises we've written into the decision log.</p>
+
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-white border border-gray-200 rounded-xl p-6">
+          <div class="text-xs font-mono text-gray-500 mb-2">D-004</div>
+          <h3 class="font-bold mb-2">Local-first</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            Prompt text is stored on your disk and nowhere else. There is no server — not because we didn't build it, but because <em>we won't</em>.
+          </p>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-xl p-6">
+          <div class="text-xs font-mono text-gray-500 mb-2">D-028</div>
+          <h3 class="font-bold mb-2">Fail-open</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            Think-Prompt never blocks Claude Code. If our daemon crashes, your editor keeps working. Data loss is preferred over your interruption.
+          </p>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-xl p-6">
+          <div class="text-xs font-mono text-gray-500 mb-2">D-030</div>
+          <h3 class="font-bold mb-2">No telemetry</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            No crash reports, no usage pings, no anonymous analytics. The only outbound network call in the whole project is the opt-in LLM analysis — and it goes directly to Anthropic with your key.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-10 text-sm text-gray-500">
+        Read every decision in
+        <a href="https://github.com/must-goldenrod/think-prompt/blob/main/docs/00-decision-log.md" class="text-accent hover:underline">docs/00-decision-log.md</a>.
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICKSTART -->
+  <section class="max-w-5xl mx-auto px-6 py-20">
+    <h2 class="text-3xl font-bold mb-2">Sixty seconds</h2>
+    <p class="text-gray-600 mb-10">From nothing to a dashboard with real data.</p>
+
+    <ol class="space-y-6">
+      <li class="flex gap-5">
+        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center font-mono text-sm">1</span>
+        <div class="flex-1">
+          <p class="font-semibold mb-1">Install</p>
+          <code class="block bg-ink text-gray-100 rounded px-4 py-2 font-mono text-sm">npm install -g @think-prompt/cli</code>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center font-mono text-sm">2</span>
+        <div class="flex-1">
+          <p class="font-semibold mb-1">Wire up the hooks + start daemons</p>
+          <code class="block bg-ink text-gray-100 rounded px-4 py-2 font-mono text-sm">think-prompt install</code>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center font-mono text-sm">3</span>
+        <div class="flex-1">
+          <p class="font-semibold mb-1">(Optional) Import your Claude Code history</p>
+          <code class="block bg-ink text-gray-100 rounded px-4 py-2 font-mono text-sm">think-prompt backfill --execute</code>
+          <p class="text-xs text-gray-500 mt-1">Reads <code>~/.claude/projects</code>. Dry-run first without <code>--execute</code> to see the count.</p>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center font-mono text-sm">4</span>
+        <div class="flex-1">
+          <p class="font-semibold mb-1">Open the dashboard</p>
+          <code class="block bg-ink text-gray-100 rounded px-4 py-2 font-mono text-sm">think-prompt open</code>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-gray-100 mt-10">
+    <div class="max-w-5xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="text-sm text-gray-500">
+        <div class="font-semibold text-ink mb-1">Think-Prompt</div>
+        MIT licensed. Built for developers who want to know.
+      </div>
+      <div class="flex gap-6 text-sm">
+        <a href="https://github.com/must-goldenrod/think-prompt" class="text-gray-500 hover:text-ink">GitHub</a>
+        <a href="https://www.npmjs.com/package/@think-prompt/cli" class="text-gray-500 hover:text-ink">npm</a>
+        <a href="https://github.com/must-goldenrod/think-prompt/discussions" class="text-gray-500 hover:text-ink">Discussions</a>
+        <a href="https://github.com/must-goldenrod/think-prompt/blob/main/CHANGELOG.md" class="text-gray-500 hover:text-ink">Changelog</a>
+        <a href="https://github.com/must-goldenrod/think-prompt/blob/main/SECURITY.md" class="text-gray-500 hover:text-ink">Security</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyInstall() {
+      const cmd = document.getElementById('install-cmd').textContent;
+      navigator.clipboard.writeText(cmd).then(() => {
+        const label = document.getElementById('copy-label');
+        const prev = label.textContent;
+        label.textContent = 'Copied!';
+        setTimeout(() => { label.textContent = prev; }, 1500);
+      });
+    }
+  </script>
+</body>
+</html>

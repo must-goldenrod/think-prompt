@@ -1,0 +1,51 @@
+name: Deploy Site
+
+# Publishes `site/` to GitHub Pages on every push to main that touches
+# those files. The site is a single static HTML file plus a tiny CSS —
+# no build step, we just upload `site/` as the Pages artifact.
+#
+# One-time maintainer setup:
+#   Repo Settings -> Pages -> Source = "GitHub Actions"
+#   (Optional) Custom domain -> think-prompt.dev, DNS CNAME to
+#   <user>.github.io, GitHub auto-issues a Let's Encrypt cert.
+#
+# Security: no run: steps use shell interpolation of user-controllable
+# inputs. Triggers exclude PRs so forks cannot touch Pages.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: upload site/ artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
