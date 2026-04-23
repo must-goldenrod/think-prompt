@@ -19,7 +19,7 @@ export interface LayoutOptions {
    * on views whose data changes on new-prompt arrival (Overview, Prompts
    * list) — leave off on detail pages to preserve scroll/inputs.
    */
-  liveRefresh?: boolean;
+  liveRefresh?: { latestId: string | null };
 }
 
 export function layout(
@@ -42,7 +42,9 @@ export function layout(
     })
     .join('');
   const langSwitcher = renderLanguageSwitcher(locale, opts);
-  const liveScript = opts.liveRefresh ? LIVE_REFRESH_SCRIPT : '';
+  const liveScript = opts.liveRefresh
+    ? `<script>document.documentElement.setAttribute('data-latest-id', ${JSON.stringify(opts.liveRefresh.latestId ?? '')});</script>${LIVE_REFRESH_SCRIPT}`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="${locale}">
@@ -135,10 +137,12 @@ function renderLanguageSwitcher(locale: Locale, opts: LayoutOptions): string {
 const LIVE_REFRESH_SCRIPT = `<script>
 (function () {
   const INITIAL = document.documentElement.getAttribute('data-latest-id') || '';
-  const INTERVAL_MS = 6000;
+  const INTERVAL_MS = 3000;
   let stopped = false;
+  let inflight = false;
   async function tick() {
-    if (stopped || document.hidden) return;
+    if (stopped || inflight || document.hidden) return;
+    inflight = true;
     try {
       const r = await fetch('/api/overview/latest-id', { cache: 'no-store' });
       if (!r.ok) return;
@@ -149,11 +153,14 @@ const LIVE_REFRESH_SCRIPT = `<script>
       }
     } catch (_) {
       // Network blip — try again next tick.
+    } finally {
+      inflight = false;
     }
   }
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !stopped) tick();
-  });
+  const wake = () => { if (!document.hidden && !stopped) tick(); };
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('focus', wake);
+  window.addEventListener('pageshow', wake);
   setInterval(tick, INTERVAL_MS);
 })();
 </script>`;

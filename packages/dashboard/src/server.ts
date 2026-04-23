@@ -78,11 +78,6 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     return row?.id ?? null;
   }
 
-  /** Inject the current latestId so the polling script can diff it. */
-  function latestIdBootScript(id: string | null): string {
-    return `<script>document.documentElement.setAttribute('data-latest-id', ${JSON.stringify(id ?? '')});</script>`;
-  }
-
   fastify.get('/health', async () => ({ ok: true }));
 
   /** Live-refresh polling target — cheap, returns JSON, no HTML. */
@@ -241,7 +236,6 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const chartHtml = renderDailyChart(days);
 
     const body = `
-      ${latestIdBootScript(latestPromptId())}
       <h1 class="text-2xl font-bold mb-6">${escapeHtml(t(locale, 'overview.title'))}</h1>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
@@ -309,7 +303,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       layout(t(locale, 'overview.title'), body, locale, {
         reqPath: '/',
         reqQuery: reqQueryPassthrough(req),
-        liveRefresh: true,
+        liveRefresh: { latestId: latestPromptId() },
       })
     );
   });
@@ -370,7 +364,6 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     ];
 
     const body = `
-      ${latestIdBootScript(latestPromptId())}
       <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'prompts.title'))}</h1>
       <form class="mb-4 flex gap-3 text-sm flex-wrap">
         <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
@@ -427,7 +420,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       layout(t(locale, 'prompts.title'), body, locale, {
         reqPath: '/prompts',
         reqQuery: reqQueryPassthrough(req),
-        liveRefresh: true,
+        liveRefresh: { latestId: latestPromptId() },
       })
     );
   });
@@ -570,6 +563,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       layout(t(locale, 'detail.title'), body, locale, {
         reqPath: `/prompts/${u.id}`,
         reqQuery: reqQueryPassthrough(req),
+        liveRefresh: { latestId: latestPromptId() },
       })
     );
   });
@@ -731,6 +725,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       layout(t(locale, 'rules.title'), body, locale, {
         reqPath: '/rules',
         reqQuery: reqQueryPassthrough(req),
+        liveRefresh: { latestId: latestPromptId() },
       })
     );
   });
@@ -795,6 +790,7 @@ think-prompt coach on</pre>
       layout(t(locale, 'doctor.title'), body, locale, {
         reqPath: '/doctor',
         reqQuery: reqQueryPassthrough(req),
+        liveRefresh: { latestId: latestPromptId() },
       })
     );
   });

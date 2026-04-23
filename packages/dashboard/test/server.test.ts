@@ -482,3 +482,64 @@ describe('renderDailyChart', () => {
     expect(svg).toContain('font-family="ui-monospace');
   });
 });
+
+// Live-refresh reliability: poll faster, cover more routes, and listen on
+// focus/pageshow so throttled background tabs still update promptly.
+describe('dashboard live-refresh', () => {
+  it('polls every 3 seconds (snappier than the old 6s)', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch(/INTERVAL_MS\s*=\s*3000/);
+    await app.close();
+  });
+
+  it('listens on focus and pageshow in addition to visibilitychange', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.body).toContain("addEventListener('focus'");
+    expect(res.body).toContain("addEventListener('pageshow'");
+    expect(res.body).toContain("addEventListener('visibilitychange'");
+    await app.close();
+  });
+
+  it('auto-refreshes on prompt detail pages', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-d', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-d', prompt_text: 'hi' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('data-latest-id');
+    expect(res.body).toContain('/api/overview/latest-id');
+    await app.close();
+  });
+
+  it('auto-refreshes on rules catalog', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/rules?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('data-latest-id');
+    expect(res.body).toContain('/api/overview/latest-id');
+    await app.close();
+  });
+
+  it('auto-refreshes on doctor page', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/doctor?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('data-latest-id');
+    expect(res.body).toContain('/api/overview/latest-id');
+    await app.close();
+  });
+
+  it('does NOT auto-refresh on settings (has edit forms — reload would lose input)', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/settings?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('/api/overview/latest-id');
+    await app.close();
+  });
+});
