@@ -2,6 +2,8 @@
 
 > Claude Code에 **프롬프트 개인 코치**를 붙여주는 로컬-전용 오픈소스 도구.
 
+[![npm version](https://img.shields.io/npm/v/think-prompt.svg)](https://www.npmjs.com/package/think-prompt)
+[![npm downloads](https://img.shields.io/npm/dm/think-prompt.svg)](https://www.npmjs.com/package/think-prompt)
 [![CI](https://github.com/must-goldenrod/think-prompt/actions/workflows/ci.yml/badge.svg)](https://github.com/must-goldenrod/think-prompt/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Release](https://img.shields.io/github/v/release/must-goldenrod/think-prompt)](https://github.com/must-goldenrod/think-prompt/releases)
@@ -24,17 +26,17 @@
 
 ---
 
-## 🚀 30초 맛보기
+## 🚀 30초 설치
 
 ```bash
 # Node 20+ 필요
-git clone https://github.com/must-goldenrod/think-prompt.git
-cd think-prompt
-pnpm install && pnpm -r build
-node packages/cli/dist/index.js install
+npm i -g think-prompt
+think-prompt install                # 훅 + 데몬 자동 설정
 # Claude Code를 평소대로 쓰고
-node packages/cli/dist/index.js open    # 대시보드 오픈
+think-prompt open                   # 대시보드 오픈 (http://127.0.0.1:47824)
 ```
+
+> 소스에서 빌드하려면 `git clone` → `pnpm install && pnpm -r build` → `node packages/cli/dist/index.js install`
 
 > 처음 써보시면 **[📘 완전 입문 가이드](./docs/GUIDE.md)** 부터. 터미널이 낯설어도 따라오실 수 있게 썼어요.
 
