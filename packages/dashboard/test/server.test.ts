@@ -1,7 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { insertPromptUsage, openDb, upsertQualityScore, upsertSession } from '@think-prompt/core';
+import {
+  insertPromptUsage,
+  insertRuleHit,
+  openDb,
+  upsertQualityScore,
+  upsertSession,
+} from '@think-prompt/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderDailyChart } from '../src/html.js';
 import { buildDashboardServer } from '../src/server.js';
@@ -61,6 +67,98 @@ describe('dashboard', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Prompt');
     expect(res.body).toContain('fix');
+    await app.close();
+  });
+
+  // Detail page coaching layout (D-040).
+  it('prompt detail hero shows the big score, tier and rewrite CTA', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-hero', cwd: '/tmp' });
+    const u = insertPromptUsage(db, {
+      session_id: 's-hero',
+      prompt_text: 'fix it',
+    });
+    upsertQualityScore(db, {
+      usage_id: u.id,
+      rule_score: 40,
+      final_score: 40,
+      tier: 'weak',
+      rules_version: 1,
+    });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
+    expect(res.statusCode).toBe(200);
+    // Hero: big 5xl mono score + "/100" microlabel + rewrite CLI command
+    expect(res.body).toMatch(/text-5xl font-mono[\s\S]{0,30}>40</);
+    expect(res.body).toContain('/100');
+    expect(res.body).toContain(`think-prompt rewrite ${u.id}`);
+    await app.close();
+  });
+
+  it('prompt detail renders each rule hit as a lesson card with a severity bar', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-cards', cwd: '/tmp' });
+    const u = insertPromptUsage(db, {
+      session_id: 's-cards',
+      prompt_text: '요약 // 번역 // 표로 정리',
+    });
+    db.close();
+
+    // Write a rule hit directly (the scorer pipeline does this in real use).
+    const db2 = openDb();
+    insertRuleHit(db2, {
+      usage_id: u.id,
+      rule_id: 'R004',
+      severity: 3,
+      message: '여러 태스크가 섞여 있습니다.',
+    });
+    db2.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=ko` });
+    expect(res.statusCode).toBe(200);
+    // Severity ≥ 3 → red accent bar.
+    expect(res.body).toMatch(/absolute left-0 top-0 h-full w-1 bg-red-500/);
+    // Rule id + SEV pill appear near each other.
+    expect(res.body).toContain('R004');
+    expect(res.body).toContain('SEV 3');
+    // KO locale → lesson example with "약한 예" / "강한 예" labels.
+    expect(res.body).toContain('약한 예');
+    expect(res.body).toContain('강한 예');
+    await app.close();
+  });
+
+  it('prompt detail has original+rewritten two-column with empty-state copy', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-two', cwd: '/tmp' });
+    const u = insertPromptUsage(db, {
+      session_id: 's-two',
+      prompt_text: 'this is the original prompt text',
+    });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('this is the original prompt text');
+    // Rewritten column exists with empty-state copy when no rewrite yet.
+    expect(res.body).toContain('Improved');
+    expect(res.body).toContain('No rewrite yet');
+    await app.close();
+  });
+
+  it('prompt detail collapses the raw meta (session/chars/turn) into <details>', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-meta', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-meta', prompt_text: 'x' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
+    // A <details> wrapper hides the noisy meta block by default.
+    expect(res.body).toMatch(/<details[\s\S]{0,200}<summary/);
     await app.close();
   });
 
