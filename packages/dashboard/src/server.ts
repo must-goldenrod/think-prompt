@@ -88,7 +88,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
    */
   const FAVICON_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-    '<rect width="32" height="32" rx="8" fill="#6366f1"/>' +
+    '<rect width="32" height="32" rx="8" fill="#10b981"/>' +
     '<rect x="7" y="17" width="4" height="8" fill="white"/>' +
     '<rect x="14" y="12" width="4" height="13" fill="white"/>' +
     '<rect x="21" y="8" width="4" height="17" fill="white"/>' +
@@ -441,12 +441,11 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
           <tr>
-            <th class="p-2 w-16">${escapeHtml(t(locale, 'prompts.col.score'))}</th>
-            <th class="p-2 w-20">${escapeHtml(t(locale, 'prompts.col.tier'))}</th>
-            <th class="p-2 w-24">${escapeHtml(t(locale, 'prompts.col.source'))}</th>
-            <th class="p-2 w-10">${escapeHtml(t(locale, 'prompts.col.hits'))}</th>
-            <th class="p-2">${escapeHtml(t(locale, 'prompts.col.prompt'))}</th>
             <th class="p-2 w-40">${escapeHtml(t(locale, 'prompts.col.created'))}</th>
+            <th class="p-2 w-16">${escapeHtml(t(locale, 'prompts.col.score'))}</th>
+            <th class="p-2 w-24">${escapeHtml(t(locale, 'prompts.col.tier'))}</th>
+            <th class="p-2 w-24">${escapeHtml(t(locale, 'prompts.col.source'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'prompts.col.prompt'))}</th>
           </tr>
         </thead>
         <tbody>
@@ -454,12 +453,11 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             .map(
               (r) =>
                 `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
+                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap">${escapeHtml(r.created_at)}</td>
                    <td class="p-2 font-mono">${r.score >= 0 ? r.score : '-'}</td>
                    <td class="p-2">${tierBadge(r.tier, locale)}</td>
                    <td class="p-2 text-xs text-gray-600 dark:text-zinc-300">${escapeHtml(r.source)}</td>
-                   <td class="p-2 text-gray-500">${r.hits}</td>
                    <td class="p-2 truncate max-w-[32rem]">${escapeHtml(r.snippet)}</td>
-                   <td class="p-2 text-gray-400 text-xs">${escapeHtml(r.created_at)}</td>
                  </tr>`
             )
             .join('')}

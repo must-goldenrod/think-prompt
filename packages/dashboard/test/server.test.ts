@@ -288,8 +288,8 @@ describe('dashboard brand tokens', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("ink: '#0b0d12'");
-    expect(res.body).toContain("accent: '#6366f1'");
+    expect(res.body).toContain("accent: '#10b981'");
+    expect(res.body).toContain("'#050812'");
     await app.close();
   });
 
@@ -297,14 +297,14 @@ describe('dashboard brand tokens', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.body).toContain('Inter');
-    expect(res.body).toContain("'SF Mono'");
+    expect(res.body).toContain('JetBrains Mono');
     await app.close();
   });
 
   it('uses an accent-coloured focus ring for keyboard users', async () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en' });
-    expect(res.body).toMatch(/:focus-visible[\s\S]{0,80}#6366f1/);
+    expect(res.body).toMatch(/:focus-visible[\s\S]{0,80}#10b981/);
     await app.close();
   });
 
@@ -655,6 +655,78 @@ describe('dashboard live-refresh', () => {
   });
 });
 
+// Prompts list — user-facing table layout. See D-036/D-038.
+describe('dashboard Prompts table (D-038 UX pass)', () => {
+  it('renders Created as the leftmost column and drops the Hits column', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
+    expect(res.statusCode).toBe(200);
+    const thead = res.body.match(/<thead[\s\S]*?<\/thead>/)?.[0] ?? '';
+    expect(thead).toMatch(/<th[^>]*>Created<\/th>[\s\S]*<th[^>]*>Score<\/th>/);
+    expect(thead).not.toMatch(/>Hits</);
+    await app.close();
+  });
+
+  it('uses "Search" as the placeholder and submit label (EN)', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
+    expect(res.body).toMatch(/placeholder="Search"/);
+    expect(res.body).toMatch(/<button[^>]*>Search<\/button>/);
+    expect(res.body).not.toMatch(/R003/);
+    await app.close();
+  });
+
+  it('uses localized 검색 for Korean, 搜索 for Chinese', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const ko = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(ko.body).toMatch(/placeholder="검색"/);
+    const zh = await app.inject({ method: 'GET', url: '/prompts?lang=zh' });
+    expect(zh.body).toMatch(/placeholder="搜索"/);
+    await app.close();
+  });
+});
+
+// Tier badge visual — stronger ring + uppercase glyph (D-038).
+describe('tier badge visual', () => {
+  it('renders the tier label in UPPERCASE ASCII', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-tier', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-tier', prompt_text: 'x' });
+    upsertQualityScore(db, {
+      usage_id: u.id,
+      rule_score: 30,
+      final_score: 30,
+      tier: 'bad',
+      rules_version: 1,
+    });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.body).toMatch(/<span[^>]*uppercase[^>]*>BAD<\/span>/);
+    await app.close();
+  });
+
+  it('applies a ring utility for higher scanability', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-ring', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-ring', prompt_text: 'x' });
+    upsertQualityScore(db, {
+      usage_id: u.id,
+      rule_score: 90,
+      final_score: 90,
+      tier: 'good',
+      rules_version: 1,
+    });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
+    expect(res.body).toMatch(/ring-1 ring-green-600\/40/);
+    await app.close();
+  });
+});
+
 // Favicon — derived from the marketing-site brand (accent + bar-chart glyph).
 // Served as a single SVG to match D-012 (no bundler, no asset pipeline).
 describe('dashboard favicon', () => {
@@ -664,7 +736,7 @@ describe('dashboard favicon', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('image/svg+xml');
     expect(res.body).toContain('<svg');
-    expect(res.body).toContain('#6366f1');
+    expect(res.body).toContain('#10b981');
     await app.close();
   });
 
