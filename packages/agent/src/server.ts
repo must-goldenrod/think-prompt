@@ -253,6 +253,7 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
   fastify.post('/v1/hook/post-tool-use', async (req) => {
     try {
       const p = PostToolUsePayload.parse(req.body);
+      upsertSession(db, { id: p.session_id, cwd: p.cwd ?? '/' });
       const inputSize = JSON.stringify(p.tool_input ?? '').length;
       const outputSize = JSON.stringify(p.tool_response ?? '').length;
       bumpToolRollup(db, {

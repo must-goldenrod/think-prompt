@@ -48,3 +48,24 @@
 - 01-hook-design §9: HTTP type 훅 6종 라우팅 정상 동작 확정
 
 **미해결:** O-002, O-004(가정대로 작동 중이지만 직접 JSONL 키 검증 별도 필요), O-006, O-008, O-009, O-010 — 모두 사용자가 특정 시나리오를 만들어야 검증 가능 (compact / resume / 인위적 timeout / Claude 답변 비교 실험).
+
+---
+
+### 2026-04-23 · PostToolUse 가 세션 미지 상태에서 FK 위반 (fail-open 은폐)
+
+**Source:** Issue #11 dogfooding 재현 — `~/.think-prompt/agent.log` 에 `SqliteError: FOREIGN KEY constraint failed` (`code: SQLITE_CONSTRAINT_FOREIGNKEY`, `msg: "post-tool-use failed"`).
+
+**Observed:**
+- Claude Code 세션을 먼저 띄운 뒤 별개 터미널에서 `think-prompt install` 을 실행하는 시나리오에서는, 이미 러닝 중인 세션의 `SessionStart` / `UserPromptSubmit` 이 우리 agent 에 도달하지 않고 이후 `PostToolUse` 만 도달한다.
+- `/v1/hook/post-tool-use` 핸들러는 `sessions` 행이 없는 상태에서 `bumpToolRollup` 을 호출 → `tool_use_rollups.session_id REFERENCES sessions(id)` FK 위반 → 500. `config.agent.fail_open` 가 빈 `{}` 로 덮어 Claude Code 자체는 영향 없음.
+- 결과: 해당 세션의 `tool_use_rollups` 가 **조용히** 누락 (집계 정확도 저하).
+
+**Why the other five hooks did not hit this:** `user-prompt-submit`, `session-start`, `subagent-start`, `subagent-stop`, `stop` 핸들러는 모두 본문 처리 전 `upsertSession(db, { id, cwd })` 를 호출해 sessions 행을 멱등 upsert. `post-tool-use` 만 이 패턴이 빠져 있었음 (`packages/agent/src/server.ts:253`).
+
+**Doc impact:**
+- 01-hook-design §1: "매 hook 핸들러는 본문 처리 전 `upsertSession` 선행" 규약을 명시 고려.
+- `CHANGELOG.md` `[Unreleased] / Fixed` 에 반영.
+
+**Fix:** `packages/agent/src/server.ts` 에 `upsertSession` 1줄 선행 호출 + 회귀 테스트 `post-tool-use upserts unknown session (FK-safe, regression for #11)` 추가. PR `fix/post-tool-use-fk-session` 참조.
+
+**Residual:** fail-open 가 이런 silent drop 을 은폐하는 구조는 D-028 의도대로이지만, 에이전트 내부 에러 카운터를 `think-prompt doctor` 에서 노출하는 후속 작업을 고려할 수 있음 (별도 이슈 후보).

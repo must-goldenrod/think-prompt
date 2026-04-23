@@ -177,6 +177,37 @@ describe('agent server', () => {
     await app.close();
   });
 
+  it('post-tool-use upserts unknown session (FK-safe, regression for #11)', async () => {
+    const { openDb } = await import('@think-prompt/core');
+    const app = buildAgentServer({ rootOverride: tmp });
+    // Simulate PostToolUse arriving before SessionStart / UserPromptSubmit:
+    // the sessions row does not exist yet, which used to trip the
+    // FOREIGN KEY constraint on tool_use_rollups.session_id.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/hook/post-tool-use',
+      payload: {
+        session_id: 'ptu-unknown-session',
+        cwd: '/tmp',
+        tool_name: 'Bash',
+        tool_input: { command: 'echo hi' },
+        tool_response: 'hi',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+    const db = openDb(tmp);
+    const session = db.prepare(`SELECT id FROM sessions WHERE id = ?`).get('ptu-unknown-session') as
+      | { id: string }
+      | undefined;
+    expect(session?.id).toBe('ptu-unknown-session');
+    const rollup = db
+      .prepare(`SELECT call_count FROM tool_use_rollups WHERE session_id = ? AND tool_name = ?`)
+      .get('ptu-unknown-session', 'Bash') as { call_count: number } | undefined;
+    expect(rollup?.call_count).toBe(1);
+    db.close();
+  });
+
   it('subagent-stop enqueues parse job', async () => {
     const app = buildAgentServer({ rootOverride: tmp });
     const res = await app.inject({
