@@ -1,2 +1,6 @@
 packages:
   - 'packages/*'
+
+preferWorkspacePackages: true
+autoInstallPeers: true
+strictPeerDependencies: false
