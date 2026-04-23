@@ -197,7 +197,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       const href = `/?lang=${locale}&days=${encodeURIComponent(value)}`;
       const active = value === selectedPeriod;
       const base = 'px-2 py-1 text-xs rounded border transition-colors';
-      const activeCls = 'bg-blue-600 text-white border-blue-600';
+      const activeCls = 'bg-accent text-white border-accent';
       const inactiveCls =
         'bg-white dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 border-gray-300 dark:border-zinc-600 hover:bg-gray-100 dark:hover:bg-zinc-700';
       return `<a href="${href}" class="${base} ${active ? activeCls : inactiveCls}">${escapeHtml(label)}</a>`;
@@ -238,12 +238,12 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const body = `
       <h1 class="text-2xl font-bold mb-6">${escapeHtml(t(locale, 'overview.title'))}</h1>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
+        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5">
           <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'overview.total_prompts'))}</div>
           <div class="text-3xl font-mono mt-2">${totals.c}</div>
           <div class="text-xs text-gray-400 mt-1">${escapeHtml(t(locale, 'overview.last_n_days', { n: DAYS }))}: ${windowTotal}</div>
         </div>
-        <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-5">
+        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5">
           <div class="flex items-center justify-between mb-3">
             <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'overview.tier_breakdown'))}</div>
             <div class="text-xs text-gray-400">${escapeHtml(t(locale, 'common.total'))} <span class="font-mono">${tierTotal}</span></div>
@@ -260,7 +260,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'common.total'))} <span class="font-mono">${windowTotal}</span></div>
           </div>
         </div>
-        <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
           ${chartHtml}
         </div>
       </section>
@@ -270,7 +270,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         ${
           worst.length === 0
             ? `<div class="text-gray-400 text-sm">${escapeHtml(t(locale, 'overview.no_scored_yet'))}</div>`
-            : `<div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700">${worst
+            : `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700">${worst
                 .map(
                   (r) =>
                     `<a href="/prompts/${r.id}?lang=${locale}" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
@@ -285,7 +285,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
       <section>
         <h2 class="text-lg font-bold mb-3">${escapeHtml(t(locale, 'overview.recent'))}</h2>
-        <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700">
+        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700">
           ${recent
             .map(
               (r) =>
@@ -386,10 +386,10 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         </select>
         <input name="rule" placeholder="${escapeHtml(t(locale, 'prompts.rule_placeholder'))}" value="${escapeHtml(ruleFilter ?? '')}"
                class="border rounded px-2 py-1 bg-white dark:bg-zinc-800" />
-        <button class="px-3 py-1 bg-blue-600 text-white rounded">${escapeHtml(t(locale, 'prompts.filter'))}</button>
+        <button class="px-3 py-1 bg-accent text-white rounded hover:bg-accent/90 transition-colors">${escapeHtml(t(locale, 'prompts.filter'))}</button>
         <a href="/prompts?lang=${locale}" class="px-3 py-1 text-gray-500">${escapeHtml(t(locale, 'prompts.clear'))}</a>
       </form>
-      <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-lg shadow overflow-hidden">
+      <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
           <tr>
             <th class="p-2 w-16">${escapeHtml(t(locale, 'prompts.col.score'))}</th>
@@ -478,7 +478,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const analyzeEnabled = currentConfig.llm.enabled && consentState === 'granted';
 
     const body = `
-      <div class="mb-3"><a href="/prompts?lang=${locale}" class="text-blue-600 text-sm">${escapeHtml(t(locale, 'common.back'))}</a></div>
+      <div class="mb-3"><a href="/prompts?lang=${locale}" class="text-accent text-sm hover:underline">${escapeHtml(t(locale, 'common.back'))}</a></div>
       <h1 class="text-2xl font-bold mb-2">${escapeHtml(t(locale, 'detail.title'))} ${escapeHtml(u.id.slice(-8))}</h1>
       <div class="text-xs text-gray-500 mb-4">
         ${escapeHtml(t(locale, 'detail.session'))} <a class="underline" href="/sessions/${u.session_id}?lang=${locale}">${escapeHtml(u.session_id)}</a>
@@ -501,11 +501,11 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="md:col-span-2 bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+        <div class="md:col-span-2 bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
           <div class="text-xs text-gray-500 mb-2">${escapeHtml(t(locale, 'detail.original'))}</div>
           <pre class="text-sm">${escapeHtml(u.prompt_text)}</pre>
         </div>
-        <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
           <div class="text-xs text-gray-500 mb-3">${escapeHtml(t(locale, 'detail.score'))}</div>
           ${
             score
@@ -522,7 +522,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </div>
 
       <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.rule_hits'))}</h2>
-      <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
+      <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
         ${
           hits.length === 0
             ? `<div class="p-3 text-sm text-gray-400">${escapeHtml(t(locale, 'detail.no_hits'))}</div>`
@@ -547,7 +547,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             : rewrites
                 .map(
                   (r) =>
-                    `<div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+                    `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
                        <div class="text-xs text-gray-500 mb-2">${escapeHtml(r.status)} · ${escapeHtml(r.created_at)}</div>
                        <pre class="text-sm">${escapeHtml(r.after_text)}</pre>
                        ${r.reason ? `<div class="mt-2 text-xs text-gray-500 italic">${escapeHtml(r.reason)}</div>` : ''}
@@ -621,7 +621,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </div>
 
       <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'session.turns'))}</h2>
-      <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
+      <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
         ${usages
           .map(
             (u) =>
@@ -636,7 +636,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </div>
 
       <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'session.subagents'))} (${subs.length})</h2>
-      <div class="bg-white dark:bg-zinc-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
+      <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
         ${
           subs.length === 0
             ? `<div class="p-3 text-sm text-gray-400">${escapeHtml(t(locale, 'session.none'))}</div>`
@@ -654,7 +654,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       </div>
 
       <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'session.tool_rollup'))}</h2>
-      <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-lg shadow overflow-hidden">
+      <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
           <tr>
             <th class="p-2">${escapeHtml(t(locale, 'session.col.tool'))}</th>
@@ -694,7 +694,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const hitMap = Object.fromEntries(hitStats.map((h) => [h.rule_id, h.c]));
     const body = `
       <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'rules.title'))}</h1>
-      <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-lg shadow overflow-hidden">
+      <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
           <tr>
             <th class="p-2 w-16">${escapeHtml(t(locale, 'rules.col.id'))}</th>
@@ -772,7 +772,7 @@ think-prompt coach on</pre>
     };
     const body = `
       <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'doctor.title'))}</h1>
-      <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4 mb-4">
+      <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4 mb-4">
         <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'doctor.counts'))}</h2>
         <ul class="text-sm space-y-1">
           <li>prompt_usages: ${counts.usages}</li>
@@ -782,7 +782,7 @@ think-prompt coach on</pre>
           <li>rewrites: ${counts.rewrites}</li>
         </ul>
       </div>
-      <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+      <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
         <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'doctor.installed'))}</h2>
         <p class="text-sm text-gray-500">${escapeHtml(agentPid?.value ?? 'unknown')}</p>
       </div>`;

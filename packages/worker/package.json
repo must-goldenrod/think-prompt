@@ -1,6 +1,6 @@
 {
   "name": "@think-prompt/worker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Think-Prompt background worker: transcript parsing, LLM judge, rewriter",
   "type": "module",
   "license": "MIT",

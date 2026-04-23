@@ -8,17 +8,54 @@ stability guarantees of v1.0 do not yet apply.
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+---
+
+## [0.2.0] — 2026-04-23
+
+Dashboard UX + brand alignment release. Adds 30-day default / long-window
+month labels to the chart, replaces manual-refresh with real live updates
+across the whole dashboard, hides the internal rules catalog from the
+main nav, and pulls the dashboard's colors / fonts / card tone into
+alignment with the marketing site. Backfill + live-capture pipelines
+unchanged.
+
 ### Added
 - **R013 `pii_detected`** — new safety rule that escalates severity 1 → 3
   based on how many distinct PII categories the masker caught in the
   prompt (email / phone / RRN / API keys / JWT / IP). Addresses C-036.
 - **R014 `vague_adverb`** — new style rule flagging 좀/대충/그냥/kinda/
   probably/maybe etc. Addresses C-023.
+- **Dashboard period selector** — 7 · 14 · 30 · 90 · 365 · all pills on
+  the Overview chart; default 30 days. `?days=` query param is the
+  single source of truth for window size.
+- **Chart: dense-mode axis labels** — charts with n > 45 bars switch
+  from per-day `MM/DD` to per-month `YY-MM` labels and suppress
+  per-bar totals, so 90/365/all views stay readable. PR #26, D-none.
+- **Live-refresh coverage** — `/prompts/:id`, `/rules`, `/doctor` now
+  auto-reload when a new prompt lands, matching Overview + Prompts
+  list. `/settings` deliberately excluded to preserve form input.
+  PR #28.
 
 ### Changed
-- **R004 `multiple_tasks`** now also fires on `//` or `/` separators when
-  combined with ≥ 2 imperative verbs, catching the "요약 // 번역 // 표로"
-  pattern that slipped through the conjunction-only detection.
+- **Live-refresh interval 6 s → 3 s** with `focus` + `pageshow` event
+  listeners added to `visibilitychange`, so background-throttled tabs
+  tick within one frame of returning to focus instead of up to a
+  minute later. PR #28.
+- **Rules catalog (`/rules`) removed from the main nav** — route still
+  responds for README/issue deep-links, but the meta-view is no
+  longer a user-facing tab. D-036 · PR #29.
+- **Dashboard brand tokens unified with the marketing site** — shared
+  `ink: #0b0d12` and `accent: #6366f1` (indigo) tokens, Inter + SF
+  Mono font cascade, accent-colored `:focus-visible` ring, accent dot
+  before the wordmark. All `blue-6xx` utility classes swapped to the
+  `accent` token; cards moved from `rounded-lg shadow` to
+  `rounded-xl border shadow-sm` for a flatter, site-matching tone.
+  D-037 · PR #30.
+- **R004 `multiple_tasks`** now also fires on `//` or `/` separators
+  when combined with ≥ 2 imperative verbs, catching the "요약 // 번역
+  // 표로" pattern that slipped through the conjunction-only detection.
   Addresses C-004.
 - **R012 `code_dump_no_instruction`** threshold lowered 80% → 65% after
   dogfooding surfaced the "7 lines of code + short question" pattern
@@ -30,13 +67,14 @@ stability guarantees of v1.0 do not yet apply.
   C-049 / C-050.
 
 ### Testing
-- Rule suite: 11 → 22 tests. Total: 53 → 64 tests, all passing.
+- Dashboard suite: 28 → **45 tests** (+17 covering chart dense mode,
+  live-refresh coverage + wake events, rules-hidden regression, brand
+  tokens and blue-class absence).
+- Full suite: 53 → **212 tests**, all passing across 23 files.
 
-### To verify
-- **M0 observation spike** — confirm Claude Code hook payloads and
-  `transcript.jsonl` field names against the assumptions encoded in
-  `packages/core/src/schema.ts` and `packages/core/src/transcript/parser.ts`.
-  See `docs/99-observation-log.md` for the 10 open questions.
+### Decisions logged
+- **D-036** · Rules catalog hidden from user-facing nav.
+- **D-037** · Dashboard brand tokens unified with `site/index.html`.
 
 ---
 
