@@ -80,6 +80,26 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
   fastify.get('/health', async () => ({ ok: true }));
 
+  /**
+   * Favicon — brand-aligned SVG glyph (accent background + ascending tier
+   * bars). Inlined here so the dashboard stays self-contained; no asset
+   * pipeline needed (D-012). Served with a one-day cache so browsers
+   * don't re-fetch on every navigation.
+   */
+  const FAVICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
+    '<rect width="32" height="32" rx="8" fill="#6366f1"/>' +
+    '<rect x="7" y="17" width="4" height="8" fill="white"/>' +
+    '<rect x="14" y="12" width="4" height="13" fill="white"/>' +
+    '<rect x="21" y="8" width="4" height="17" fill="white"/>' +
+    '</svg>';
+  fastify.get('/favicon.svg', async (_req, reply) => {
+    reply
+      .type('image/svg+xml')
+      .header('Cache-Control', 'public, max-age=86400, immutable')
+      .send(FAVICON_SVG);
+  });
+
   /** Live-refresh polling target — cheap, returns JSON, no HTML. */
   fastify.get('/api/overview/latest-id', async () => {
     return { latestId: latestPromptId() };

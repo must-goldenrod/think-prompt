@@ -52,5 +52,7 @@ the homepage gets a PR.
 
 - [ ] Replace the placeholder demo block with a 30-second GIF before v0.1.0
       launch (see `docs/10-launch-strategy.md` §0).
-- [ ] Add favicon + Open Graph image (1200×630 PNG).
+- [x] Add favicon (`favicon.svg` — accent background + ascending-bar glyph,
+      shared with the local dashboard).
+- [ ] Add Open Graph image (1200×630 PNG).
 - [ ] Custom domain DNS once it's purchased.
