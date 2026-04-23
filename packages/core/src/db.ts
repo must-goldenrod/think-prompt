@@ -2,12 +2,18 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import Database, { type Database as Db } from 'better-sqlite3';
 import { detectLanguage } from './lang.js';
-import { MIGRATION_001, MIGRATION_002, MIGRATION_003, MIGRATION_004 } from './migrations/sql.js';
+import {
+  MIGRATION_001,
+  MIGRATION_002,
+  MIGRATION_003,
+  MIGRATION_004,
+  MIGRATION_005,
+} from './migrations/sql.js';
 import { getPaths } from './paths.js';
 import { maskPii } from './pii.js';
 import { ulid } from './ulid.js';
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 export function openDb(rootOverride?: string): Db {
   const paths = getPaths(rootOverride);
@@ -35,6 +41,7 @@ function runMigrations(db: Db): void {
     { v: 2, sql: MIGRATION_002 },
     { v: 3, sql: MIGRATION_003 },
     { v: 4, sql: MIGRATION_004 },
+    { v: 5, sql: MIGRATION_005 },
   ];
   for (const m of migrations) {
     if (m.v <= current) continue;

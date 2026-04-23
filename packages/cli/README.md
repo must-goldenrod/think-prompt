@@ -60,7 +60,6 @@ think-prompt doctor          # 건강 진단
 
 think-prompt list [--tier bad] [--rule R003] [--limit 20]
 think-prompt show <id>       # 프롬프트 상세 + 룰 히트 + 점수
-think-prompt rewrite <id>    # LLM 리라이트 제안
 
 think-prompt open            # 대시보드 브라우저 오픈
 think-prompt wipe --yes      # 완전 삭제

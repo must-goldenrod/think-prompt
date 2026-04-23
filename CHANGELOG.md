@@ -12,6 +12,37 @@ _No unreleased changes._
 
 ---
 
+## [0.4.0] — 2026-04-23
+
+Removes the `think-prompt rewrite` feature in response to user feedback
+that it wasn't part of the intended product surface. The deep analysis
+feature (`think-prompt analyze`, consent-gated, D-033) is unaffected —
+it's a separate opt-in path with its own UI and data path.
+
+### Removed (breaking)
+- **`think-prompt rewrite <id>` CLI command** — the command no longer
+  exists. Use `think-prompt analyze` if you want a consent-gated LLM
+  suggestion pass.
+- **`rewrites` SQLite table** — dropped by MIGRATION_005 on existing
+  installs. Any historical auto-generated rewrites are discarded.
+- **`rewrite` queue job kind** — no longer enqueued by the worker.
+- **Dashboard detail page: "Improved" column, hero rewrite CTA,
+  "Previous rewrites" section** — prompt detail is now Score → Why →
+  How without the rewrite suggestion slot.
+- **i18n keys** — `detail.suggested_rewrites`, `detail.rewrite_none`,
+  `detail.rewrite_cta`, `detail.rewritten`, `detail.previous_rewrites`
+  removed across all 5 locales.
+
+### Changed
+- `think-prompt doctor` no longer counts the `rewrites` table and no
+  longer mentions "rewrite" in its LLM-disabled hint (it still
+  mentions `deep-analysis skipped`).
+
+### Decisions logged
+- **D-041** · `think-prompt rewrite` feature removed.
+
+---
+
 ## [0.3.0] — 2026-04-23
 
 Dashboard coaching UX release. Pivots `/prompts/:id` from a query-dump
