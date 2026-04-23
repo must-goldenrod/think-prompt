@@ -246,31 +246,60 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       )
       .all() as Array<{ id: string; snippet: string; final_score: number; tier: string }>;
 
-    const tierHtml = tierCounts
-      .map(
-        (tc) =>
-          `<div class="flex items-center gap-2"><span class="font-mono text-sm">${tc.c}</span>${tierBadge(tc.tier, locale)}</div>`
-      )
+    // Tier tiles — each tier gets its own card with a big mono number, matching
+    // the "Total prompts" card's visual weight so all 6 (Total + 5 tiers) scan
+    // as a single glanceable KPI row. Left color bar = tier identity; percentage
+    // subtitle gives share-of-total context without adding extra labels.
+    const TIER_TILE_STYLE: Record<string, { bar: string; num: string; label: string }> = {
+      good: {
+        bar: 'bg-green-500',
+        num: 'text-green-700 dark:text-green-300',
+        label: 'GOOD',
+      },
+      ok: {
+        bar: 'bg-yellow-500',
+        num: 'text-yellow-700 dark:text-yellow-300',
+        label: 'OK',
+      },
+      weak: {
+        bar: 'bg-orange-500',
+        num: 'text-orange-700 dark:text-orange-300',
+        label: 'WEAK',
+      },
+      bad: { bar: 'bg-red-500', num: 'text-red-700 dark:text-red-300', label: 'BAD' },
+      'n/a': {
+        bar: 'bg-gray-400',
+        num: 'text-gray-500 dark:text-zinc-400',
+        label: 'N/A',
+      },
+    };
+    const tierTilesHtml = tierCounts
+      .map((tc) => {
+        const pct = tierTotal > 0 ? Math.round((tc.c / tierTotal) * 100) : 0;
+        const style = TIER_TILE_STYLE[tc.tier] ?? TIER_TILE_STYLE['n/a'];
+        const styleObj = style ?? { bar: 'bg-gray-400', num: 'text-gray-500', label: 'N/A' };
+        return `
+          <div class="relative bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5 overflow-hidden">
+            <div class="absolute left-0 top-0 h-full w-1 ${styleObj.bar}"></div>
+            <div class="text-[10px] text-gray-500 dark:text-zinc-400 uppercase tracking-widest font-mono font-semibold">${styleObj.label}</div>
+            <div class="text-3xl font-mono mt-2 ${styleObj.num}">${tc.c.toLocaleString()}</div>
+            <div class="text-xs text-gray-400 mt-1">${pct}%</div>
+          </div>`;
+      })
       .join('');
 
     const chartHtml = renderDailyChart(days);
 
     const body = `
       <h1 class="text-2xl font-bold mb-6">${escapeHtml(t(locale, 'overview.title'))}</h1>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <section aria-label="${escapeHtml(t(locale, 'overview.tier_breakdown'))}" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5">
-          <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'overview.total_prompts'))}</div>
-          <div class="text-3xl font-mono mt-2">${totals.c}</div>
-          <div class="text-xs text-gray-400 mt-1">${escapeHtml(t(locale, 'overview.last_n_days', { n: DAYS }))}: ${windowTotal}</div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold">${escapeHtml(t(locale, 'overview.total_prompts'))}</div>
+          <div class="text-3xl font-mono mt-2">${totals.c.toLocaleString()}</div>
+          <div class="text-xs text-gray-400 mt-1">${escapeHtml(t(locale, 'overview.last_n_days', { n: DAYS }))}: ${windowTotal.toLocaleString()}</div>
         </div>
-        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-3">
-            <div class="text-xs text-gray-500">${escapeHtml(t(locale, 'overview.tier_breakdown'))}</div>
-            <div class="text-xs text-gray-400">${escapeHtml(t(locale, 'common.total'))} <span class="font-mono">${tierTotal}</span></div>
-          </div>
-          <div class="flex gap-3 flex-wrap">${tierHtml}</div>
-        </div>
-      </div>
+        ${tierTilesHtml}
+      </section>
 
       <section class="mb-8">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
