@@ -244,6 +244,34 @@ describe('dashboard period selector (?days=)', () => {
   });
 });
 
+// Rules catalog is an internal/meta view — hide it from the user-facing nav,
+// but keep the route alive so deep-links from README/issues still work.
+describe('dashboard nav — rules hidden', () => {
+  it('does not link to /rules from the main nav', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toMatch(/<a href="\/rules\?[^"]*"[^>]*>/);
+    await app.close();
+  });
+
+  it('does not link to /rules from the Korean nav either', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=ko' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toMatch(/<a href="\/rules\?[^"]*"[^>]*>/);
+    await app.close();
+  });
+
+  it('keeps the /rules route reachable by URL for deep-links', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/rules?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('R001');
+    await app.close();
+  });
+});
+
 describe('dashboard i18n', () => {
   it('serves Korean chrome when ?lang=ko', async () => {
     const app = buildDashboardServer({ rootOverride: tmp });
