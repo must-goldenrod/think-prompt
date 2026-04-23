@@ -1,6 +1,6 @@
 {
   "name": "think-prompt",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local-first prompt coach for Claude Code — collects your prompts via hooks, scores them with rules, and shows patterns in a private dashboard. No data leaves your machine.",
   "type": "module",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@think-prompt/dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Think-Prompt local web dashboard (127.0.0.1:47824) — 5-language i18n, deep analysis UI",
   "type": "module",
   "license": "MIT",

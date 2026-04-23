@@ -274,7 +274,9 @@ describe('dashboard brand tokens', () => {
   it('puts an accent dot before the Think-Prompt logo wordmark', async () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en' });
-    expect(res.body).toMatch(/<span class="inline-block w-2 h-2 rounded-full bg-accent"><\/span>Think-Prompt/);
+    expect(res.body).toMatch(
+      /<span class="inline-block w-2 h-2 rounded-full bg-accent"><\/span>Think-Prompt/
+    );
     await app.close();
   });
 
