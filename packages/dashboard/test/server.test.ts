@@ -89,13 +89,50 @@ describe('dashboard', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.statusCode).toBe(200);
-    for (const tier of ['good', 'ok', 'weak', 'bad', 'n/a']) {
+    // Each tier now gets its own KPI tile with the uppercase ASCII label.
+    for (const tier of ['GOOD', 'OK', 'WEAK', 'BAD', 'N/A']) {
       expect(res.body).toContain(`>${tier}<`);
     }
+    // "Tier breakdown" label is preserved as an aria-label on the tile group
+    // (screen-reader accessible, visually implicit via the tier tiles).
     expect(res.body).toContain('Tier breakdown');
     // Coach mode card is permanently removed from Overview (was previously
     // a 3rd tile).
     expect(res.body).not.toContain('Coach mode');
+    await app.close();
+  });
+
+  it('overview renders Total + 5 tier tiles as one KPI row (big mono numbers)', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-tiles', cwd: '/tmp' });
+    for (let i = 0; i < 3; i++) {
+      const u = insertPromptUsage(db, {
+        session_id: 's-tiles',
+        prompt_text: `p${i}`,
+      });
+      upsertQualityScore(db, {
+        usage_id: u.id,
+        rule_score: 80,
+        final_score: 80,
+        tier: 'good',
+        rules_version: 1,
+      });
+    }
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.statusCode).toBe(200);
+    // 6-card grid (Total + 5 tiers), each big-number mono tile.
+    expect(res.body).toMatch(/lg:grid-cols-6/);
+    // Total prompts tile has the big 3xl mono number.
+    expect(res.body).toMatch(/Total prompts[\s\S]{0,200}text-3xl font-mono[\s\S]{0,20}>3</);
+    // Each tier has its own tile with GOOD/OK/... label above a big number.
+    expect(res.body).toMatch(/>GOOD<\/div>[\s\S]{0,100}text-3xl font-mono[\s\S]{0,60}>3</);
+    // Each tile shows a percentage subtitle.
+    expect(res.body).toMatch(/>100%</);
+    // Tier-colored left bar appears per tile.
+    expect(res.body).toMatch(/absolute left-0 top-0 h-full w-1 bg-green-500/);
     await app.close();
   });
 
