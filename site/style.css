@@ -1,0 +1,28 @@
+/* Minimal site-specific CSS. Tailwind covers almost everything; this file
+ * holds a few things that are awkward to do purely in utility classes:
+ * scrollbar styling on the install command, smoother focus rings, and
+ * a subtle gradient text option for the accent heading that only works
+ * with plain CSS. */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Improve focus ring for keyboard users without over-styling mouse users. */
+:focus-visible {
+  outline: 2px solid rgb(99 102 241);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* The horizontal scroll inside the install command block — keep it from
+ * showing an ugly OS-native scrollbar. */
+#install-cmd::-webkit-scrollbar {
+  height: 0;
+}
