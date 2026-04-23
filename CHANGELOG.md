@@ -8,7 +8,15 @@ stability guarantees of v1.0 do not yet apply.
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Fixed
+- **agent `/v1/hook/post-tool-use`** now upserts the session row before
+  bumping the tool-use rollup. Previously, if `PostToolUse` fired for a
+  session that had not yet produced a `SessionStart` / `UserPromptSubmit`
+  (e.g. hooks installed mid-session), the `tool_use_rollups.session_id`
+  foreign key constraint failed and the event was dropped. Fail-open
+  swallowed the error, so this was invisible to users but silently
+  under-counted tool rollups for that session. Matches the upsert
+  pattern already used by the other five hook handlers. Fixes #11.
 
 ---
 
