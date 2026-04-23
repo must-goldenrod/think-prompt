@@ -1,5 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Design docs
+  - name: 💬 Discussions
+    url: https://github.com/must-goldenrod/think-prompt/discussions
+    about: Open-ended questions, ideas, show-and-tell. Better than Issues for conversations.
+  - name: 🔒 Security issue
+    url: https://github.com/must-goldenrod/think-prompt/security/advisories/new
+    about: Private reporting for vulnerabilities. Do NOT file public issues for security problems.
+  - name: 📚 Design docs
     url: https://github.com/must-goldenrod/think-prompt/tree/main/docs
     about: Browse the decision log, hook design, rule engine, and build plan before filing.
