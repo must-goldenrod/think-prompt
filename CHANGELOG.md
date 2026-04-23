@@ -8,6 +8,78 @@ stability guarantees of v1.0 do not yet apply.
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+---
+
+## [0.3.0] — 2026-04-23
+
+Dashboard coaching UX release. Pivots `/prompts/:id` from a query-dump
+view into a coaching session (Score → Why → How), exposes each tier
+count as its own KPI tile on Overview, aligns the color/font palette
+with the canonical marketing site (emerald `#10b981` + ink dark scale
++ Inter + JetBrains Mono), and ships 18 Korean bad/good coaching
+examples inline on the detail page. Capture / backfill / hook
+pipelines unchanged.
+
+### Added
+- **Prompt Detail page reframed as a coaching session** — hero card
+  with the big score + tier + one-line diagnosis derived from the top
+  two rule hits + rewrite CLI command; original and the latest
+  rewrite sit side-by-side so users can compare; previous rewrites
+  demote to their own section; feedback 👍👎 moves below the main
+  content so users rate AFTER reading; meta (session/chars/turn/id)
+  collapses into `<details>`. D-040 · PR #39.
+- **Rule hits render as lesson cards** — severity-colored left bar
+  (sev 3 red / 2 orange / 1 yellow), rule id + SEV badge, message,
+  and — in KO locale — a concrete 약한 예 / 강한 예 + optional 💡
+  habit tip. D-040 · PR #39.
+- **`packages/dashboard/src/rule-examples.ts`** — 18 Korean bad/good
+  coaching examples (R001…R018) inlined for the detail page. Other
+  locales fall back to message-only rendering; English / Japanese /
+  Chinese / Spanish coaching copy is a follow-up. D-040 · PR #39.
+- **Overview KPI row** — Total prompts + 5 tier tiles (GOOD, OK,
+  WEAK, BAD, N/A) in a responsive 6-card grid (`grid-cols-2
+  md:grid-cols-3 lg:grid-cols-6`), each with a big mono number,
+  tier-colored left bar, and percentage subtitle. The `Tier
+  breakdown` section label is preserved as `aria-label` on the tile
+  group. PR #38.
+- **Brand favicon** — accent-colored rounded-square with three
+  ascending bars (the dashboard signature), served from the
+  dashboard at `/favicon.svg` with a one-day cache and shipped
+  alongside the site at `site/favicon.svg`. PR #36.
+
+### Changed
+- **Dashboard brand tokens realigned with the canonical marketing
+  site** — `accent: #6366f1 → #10b981` (emerald), `ink` scalar →
+  scale (`950..600`), font cascade `Inter + Noto Sans KR/JP/SC +
+  ui-sans-serif` + `JetBrains Mono + ui-monospace`, emerald focus
+  ring + `::selection`, emerald favicon. Google Fonts preconnect +
+  CSS link injection. D-038 (supersedes D-037) · PR #37.
+- **Prompts table UX pass** — `Created` column moves leftmost,
+  `Hits` column dropped, placeholder + submit button switched from
+  "rule id e.g. R003 / Filter" to **"Search"** across all 5 locales
+  (placeholder and label share the same translated word), tier
+  badge upgraded to `bg-*-50 text-*-700 ring-1 ring-*-600/40` with
+  uppercase ASCII label (GOOD/OK/WEAK/BAD/N/A) and dark-mode
+  mapping; `aria-label` retains the locale-translated tier label
+  for screen readers. D-039 · PR #37.
+- **`Rules` hidden from the main nav** — the rule catalog is a
+  meta-view; the route and i18n keys stay intact so README/issue
+  deep-links still resolve. D-036 · PR #29.
+- **`renderDailyChart` axis-label strategy** — windows > 45 bars
+  switch from per-day `MM/DD` to per-month `YY-MM` and suppress
+  per-bar totals so 90/365/all views stay readable. PR #26.
+- **Live-refresh reliability** — polling cadence 6 s → **3 s**,
+  wake events widened from `visibilitychange` alone to include
+  `focus` + `pageshow` so background-throttled tabs tick promptly
+  after the user returns. Live-refresh coverage extended from
+  Overview + Prompts list to `/prompts/:id`, `/rules`, `/doctor`;
+  `/settings` remains excluded to protect form input. PR #28.
+- **Card tone** — `rounded-lg shadow` → `rounded-xl border
+  border-gray-200 shadow-sm` across the dashboard for a flatter,
+  site-matching silhouette. PR #37.
+
 ### Fixed
 - **agent `/v1/hook/post-tool-use`** now upserts the session row before
   bumping the tool-use rollup. Previously, if `PostToolUse` fired for a
@@ -17,6 +89,19 @@ stability guarantees of v1.0 do not yet apply.
   swallowed the error, so this was invisible to users but silently
   under-counted tool rollups for that session. Matches the upsert
   pattern already used by the other five hook handlers. Fixes #11.
+
+### Testing
+- Dashboard suite: 45 → **58 tests** across PR #36/#37/#38/#39.
+- Full suite: 212 → **224 tests**, all passing across 23 files.
+
+### Decisions logged
+- **D-036** · `/rules` catalog hidden from main nav.
+- **D-037** · (superseded) dashboard brand tokens tuned to indigo.
+- **D-038** · dashboard brand tokens realigned to emerald + ink
+  scale (supersedes D-037).
+- **D-039** · Prompts table UX pass (Created leftmost, Hits
+  removed, Search label, strong tier badges).
+- **D-040** · `/prompts/:id` reframed as a coaching session.
 
 ---
 

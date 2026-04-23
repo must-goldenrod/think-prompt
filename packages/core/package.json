@@ -1,6 +1,6 @@
 {
   "name": "@think-prompt/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shared core: DB, types, logger, PII, scorer, transcript parser",
   "type": "module",
   "license": "MIT",
