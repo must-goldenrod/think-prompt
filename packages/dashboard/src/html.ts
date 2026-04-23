@@ -52,21 +52,29 @@ export function layout(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(title)} · Think-Prompt</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // Shared brand tokens — mirrors site/index.html so the marketing page and
-    // the local dashboard read as the same product. See D-037.
+    // Shared brand tokens — mirrors the canonical marketing site
+    // (github.com/must-goldenrod/think-prompt-site). See D-038, which
+    // supersedes the earlier D-037 indigo attempt that was based on
+    // the wrong reference site.
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            ink: '#0b0d12',
-            accent: '#6366f1',
+            accent: '#10b981',
+            ink: {
+              950: '#050812', 900: '#0b0f19', 800: '#0f172a',
+              700: '#111827', 600: '#1f2937'
+            },
             good: '#22c55e', ok: '#eab308', weak: '#f97316', bad: '#ef4444'
           },
           fontFamily: {
-            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Inter', 'sans-serif'],
-            mono: ['ui-monospace', 'SF Mono', 'Menlo', 'Monaco', 'monospace']
+            sans: ['Inter', '"Noto Sans KR"', '"Noto Sans JP"', '"Noto Sans SC"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
           }
         }
       }
@@ -74,17 +82,19 @@ export function layout(
   </script>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      font-family: 'Inter', 'Noto Sans KR', 'Noto Sans JP', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
       font-feature-settings: "ss01", "cv11";
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
     }
+    pre, code, .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
     pre { white-space: pre-wrap; word-break: break-word; }
     :focus-visible {
-      outline: 2px solid #6366f1;
+      outline: 2px solid #10b981;
       outline-offset: 3px;
       border-radius: 4px;
     }
+    ::selection { background: #10b981; color: #050812; }
   </style>
 </head>
 <body class="bg-gray-50 dark:bg-zinc-900 dark:text-zinc-100 min-h-screen">
@@ -202,13 +212,19 @@ const LABEL_KEYS = {
 } as const;
 
 export function tierBadge(tier: string, locale: Locale = 'en'): string {
+  // Stronger visual weight: solid ring, uppercase mono label, higher contrast.
+  // The locale label drives the aria-label for screen readers, but the badge
+  // itself renders the ASCII tier token so users see a consistent
+  // "GOOD / OK / WEAK / BAD / N/A" glance regardless of UI language.
   const classMap: Record<string, string> = {
-    good: 'bg-green-100 text-green-800',
-    ok: 'bg-yellow-100 text-yellow-800',
-    weak: 'bg-orange-100 text-orange-800',
-    bad: 'bg-red-100 text-red-800',
+    good: 'bg-green-50 text-green-700 ring-1 ring-green-600/40 dark:bg-green-500/10 dark:text-green-300 dark:ring-green-500/40',
+    ok: 'bg-yellow-50 text-yellow-800 ring-1 ring-yellow-600/40 dark:bg-yellow-500/10 dark:text-yellow-300 dark:ring-yellow-500/40',
+    weak: 'bg-orange-50 text-orange-700 ring-1 ring-orange-600/40 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/40',
+    bad: 'bg-red-50 text-red-700 ring-1 ring-red-600/40 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/40',
   };
-  const cls = classMap[tier] ?? 'bg-gray-100 text-gray-800';
+  const cls =
+    classMap[tier] ??
+    'bg-gray-100 text-gray-700 ring-1 ring-gray-400/40 dark:bg-zinc-700 dark:text-zinc-200 dark:ring-zinc-500/40';
   const labelKey =
     tier === 'good'
       ? 'tier.good'
@@ -219,8 +235,9 @@ export function tierBadge(tier: string, locale: Locale = 'en'): string {
           : tier === 'bad'
             ? 'tier.bad'
             : 'tier.na';
-  const label = t(locale, labelKey);
-  return `<span class="inline-block px-2 py-0.5 text-xs rounded ${cls}">${escapeHtml(label)}</span>`;
+  const ariaLabel = t(locale, labelKey);
+  const display = tier === 'n/a' ? 'N/A' : tier.toUpperCase();
+  return `<span aria-label="${escapeHtml(ariaLabel)}" class="inline-block px-2 py-0.5 text-[11px] font-mono font-semibold tracking-wider uppercase rounded ${cls}">${escapeHtml(display)}</span>`;
 }
 
 export interface DailyBucket {
