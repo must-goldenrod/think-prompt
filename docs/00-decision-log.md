@@ -315,5 +315,46 @@
 
 ---
 
+## D-038 · 대시보드 브랜드 재정렬 — emerald + ink scale (D-037 supersede)
+
+- **Date:** 2026-04-23
+- **Problem:** D-037 은 "사이트 로컬 `site/` 디렉터리" 를 참조해 `accent: #6366f1` (indigo) 로 대시보드를 정렬했지만, **유저가 실제 운영하는 마케팅 사이트는 별도 repo `github.com/must-goldenrod/think-prompt-site`** 였다. 그 사이트의 캐노니컬 팔레트는 emerald (`#10b981`) + ink 950/900/800/700/600 dark scale + Inter + Noto Sans + JetBrains Mono. 결과: 유저 관점에서 대시보드와 사이트 컬러가 완전히 달라 "같은 프로덕트" 신호가 깨짐.
+- **Decision:** 대시보드 토큰을 **emerald + ink scale** 로 재정렬하고 D-037 을 supersede. 변경:
+  - `accent`: `#6366f1` → `#10b981` (emerald-500)
+  - `ink`: scalar → scale (`950: #050812, 900: #0b0f19, 800: #0f172a, 700: #111827, 600: #1f2937`)
+  - `fontFamily.sans`: Inter + Noto Sans KR/JP/SC + system-ui + sans-serif
+  - `fontFamily.mono`: JetBrains Mono + ui-monospace + SFMono-Regular + Menlo
+  - `:focus-visible` 링, `::selection`, favicon 전부 emerald 로 교체
+  - Google Fonts preconnect + CSS 링크 주입 (4 family × 5 weight)
+- **Scope:** 대시보드 UI 전체. favicon 두 위치(대시보드 인라인 SVG · `site/favicon.svg`) 동시 교체. 번들러 도입 없음 (D-012 유지).
+- **D-037 과의 관계:** D-037 은 "잘못된 소스" 에 기반한 결정이었으므로 **취소**. 회복 비용은 낮음 — 토큰 이름 그대로 유지하면서 값만 교체, 호출 코드 변경 없음.
+- **왜 dark body 기본 전환은 안 하는가:** 사이트는 dark-only 지만 대시보드는 데이터 UI 로서 밝은 배경의 가독성이 낫다. 라이트 기본 + 다크 모드(선택) 구조 유지. ink scale 은 향후 부분적 dark 컴포넌트(터미널 카드·코드 블록 등)에 사용 가능하도록 열어 둠.
+
+### D-037 상태: 취소 (superseded by D-038)
+
+---
+
+## D-039 · Prompts 테이블 UX 정리 — Created 좌측·Hits 제거·Search 버튼·강조 Tier 배지
+
+- **Date:** 2026-04-23
+- **Problem:** 유저가 Prompts 페이지에서 (a) Hits 칼럼이 정보 가치 대비 공간 낭비, (b) Created 가 우측 끝이라 시선 흐름이 역방향, (c) 검색 입력란 placeholder 에 `rule id e.g. R003` 이 떠서 "여기서 R 을 쳐야 하나" 혼란, (d) 제출 버튼 라벨 "Filter/필터" 가 실행 버튼임을 가리지 못함, (e) tier 배지(good/ok/weak/bad)가 조용한 pill 이라 한눈에 안 들어옴 — 을 지적.
+- **Decision:**
+  - **칼럼 재배열**: `Created (맨 왼쪽) · Score · Tier · Source · Prompt`. Hits 칼럼 제거 (rule_hits 수는 디테일 페이지에서 인라인 표시).
+  - **Search placeholder + 버튼 라벨**: 5개 언어 모두 "Search/검색/搜索/Buscar/検索" 로 통일. `prompts.filter` i18n 키는 유지하되 값만 "Search" 류로 변경 (향후 복원 비용 0).
+  - **Tier 배지 강화**: `bg-*-50 text-*-700 ring-1 ring-*-600/40` + `uppercase tracking-wider font-mono font-semibold text-[11px]`. 다크모드 매핑 포함. 뱃지 내부 텍스트는 ASCII (`GOOD/OK/WEAK/BAD/N/A`) 로 언어 무관하게 동일. aria-label 은 로케일 번역값으로 스크린리더 접근성 유지.
+- **Rationale:**
+  - Created 좌측 배치 = 최신순 정렬 기본값과 시선 흐름 정합 (좌→우 스캔).
+  - Hits 칼럼 제거는 D-036 과 같은 정신: "유저가 자기 프롬프트를 돌아보는" 핵심 동선에서 메타 정보 노이즈 제거.
+  - "Search" 는 유저의 의도("필터를 실행한다") 와 UI 표면("버튼") 의 매칭이 더 직관적. `prompts.filter` 키 유지는 i18n 복원 비용 최소화.
+  - Tier 배지 uppercase + ring + mono 는 데이터 행에서 tier 가 가장 중요한 신호임을 시각적으로 확고히 함.
+- **Scope:** `packages/dashboard/src/server.ts` 테이블 · `packages/dashboard/src/html.ts` `tierBadge()` · `packages/dashboard/src/i18n.ts` 5개 언어. 테스트 5건 추가.
+- **관계:** D-032 미션 정렬 — "유저의 자기 프롬프트 자각" 서피스를 더 선명하게.
+
+---
+
 ## 취소된 결정
+
+### D-037 · 대시보드 브랜드 토큰 통일 (로컬 `site/` 기반, indigo)
+- **취소 이유:** 잘못된 브랜드 소스(`site/` 디렉터리) 를 참조. 실제 canonical 사이트(별도 repo `think-prompt-site`) 는 emerald 팔레트. D-038 로 대체.
+- **취소일:** 2026-04-23
 *(없음 — 새 결정이 기존 것을 번복할 때 여기에 기록)*
