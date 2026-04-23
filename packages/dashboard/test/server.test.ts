@@ -617,3 +617,33 @@ describe('dashboard live-refresh', () => {
     await app.close();
   });
 });
+
+// Favicon — derived from the marketing-site brand (accent + bar-chart glyph).
+// Served as a single SVG to match D-012 (no bundler, no asset pipeline).
+describe('dashboard favicon', () => {
+  it('serves an SVG favicon on /favicon.svg with the brand accent color', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/favicon.svg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('image/svg+xml');
+    expect(res.body).toContain('<svg');
+    expect(res.body).toContain('#6366f1');
+    await app.close();
+  });
+
+  it('sends a long-lived cache header for the favicon so browsers reuse it', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/favicon.svg' });
+    expect(res.headers['cache-control']).toMatch(/max-age=\d+/);
+    await app.close();
+  });
+
+  it('links the favicon from every page <head>', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    for (const url of ['/?lang=en', '/prompts?lang=en', '/doctor?lang=en']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.body).toMatch(/<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg"/);
+    }
+    await app.close();
+  });
+});
