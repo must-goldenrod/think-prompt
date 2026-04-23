@@ -169,8 +169,8 @@ describe('dashboard period selector (?days=)', () => {
     const res = await app.inject({ method: 'GET', url: '/?lang=en' });
     expect(res.statusCode).toBe(200);
     // The 30d pill should be the one marked active (blue bg), 7d should be inactive.
-    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/);
-    expect(res.body).not.toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-accent[^>]*>30d<\/a>/);
+    expect(res.body).not.toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-accent[^>]*>7d<\/a>/);
     await app.close();
   });
 
@@ -178,7 +178,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=7' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-blue-600[^>]*>7d<\/a>/);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=7"[^>]*bg-accent[^>]*>7d<\/a>/);
     await app.close();
   });
 
@@ -186,7 +186,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=90' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(/<a href="\/\?lang=en&days=90"[^>]*bg-blue-600[^>]*>90d<\/a>/);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=90"[^>]*bg-accent[^>]*>90d<\/a>/);
     await app.close();
   });
 
@@ -194,7 +194,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=365' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(/<a href="\/\?lang=en&days=365"[^>]*bg-blue-600[^>]*>365d<\/a>/);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=365"[^>]*bg-accent[^>]*>365d<\/a>/);
     await app.close();
   });
 
@@ -207,7 +207,7 @@ describe('dashboard period selector (?days=)', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/?lang=en&days=all' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(/<a href="\/\?lang=en&days=all"[^>]*bg-blue-600[^>]*>all<\/a>/);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=all"[^>]*bg-accent[^>]*>all<\/a>/);
     await app.close();
   });
 
@@ -218,7 +218,7 @@ describe('dashboard period selector (?days=)', () => {
       url: '/?lang=en&days=not-a-number',
     });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-blue-600[^>]*>30d<\/a>/);
+    expect(res.body).toMatch(/<a href="\/\?lang=en&days=30"[^>]*bg-accent[^>]*>30d<\/a>/);
     await app.close();
   });
 
@@ -240,6 +240,50 @@ describe('dashboard period selector (?days=)', () => {
     const res = await app.inject({ method: 'GET', url: '/?lang=ko&days=all' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('>전체<');
+    await app.close();
+  });
+});
+
+// Brand alignment with site/index.html — shared ink/accent tokens, Inter-ready
+// font stack, focus ring, logo dot. See D-037.
+describe('dashboard brand tokens', () => {
+  it("exposes ink and accent colors in the page's Tailwind config", async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("ink: '#0b0d12'");
+    expect(res.body).toContain("accent: '#6366f1'");
+    await app.close();
+  });
+
+  it('declares the sans + mono font family extension to match the site', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.body).toContain('Inter');
+    expect(res.body).toContain("'SF Mono'");
+    await app.close();
+  });
+
+  it('uses an accent-coloured focus ring for keyboard users', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.body).toMatch(/:focus-visible[\s\S]{0,80}#6366f1/);
+    await app.close();
+  });
+
+  it('puts an accent dot before the Think-Prompt logo wordmark', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(res.body).toMatch(/<span class="inline-block w-2 h-2 rounded-full bg-accent"><\/span>Think-Prompt/);
+    await app.close();
+  });
+
+  it('no longer uses raw Tailwind blue-6xx anywhere in the rendered chrome', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    for (const url of ['/?lang=en', '/prompts?lang=en', '/doctor?lang=en']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.body).not.toMatch(/\b(bg|text|border|hover:bg|hover:text)-blue-\d/);
+    }
     await app.close();
   });
 });

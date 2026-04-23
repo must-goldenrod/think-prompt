@@ -293,5 +293,27 @@
 
 ---
 
+## D-037 · 대시보드 브랜드 토큰 사이트와 통일 (ink · accent · font · 카드)
+
+- **Date:** 2026-04-23
+- **Problem:** 랜딩(`site/index.html`)과 로컬 대시보드가 같은 프로덕트인데 브랜드 신호가 달랐다. 사이트는 `accent: #6366f1` (indigo) + `ink: #0b0d12` 토큰을 쓰고, Inter cascade + mono 시그너처 라벨·accent 포커스 링·도트 로고로 정체성을 만들어 놓았는데, 대시보드는 Tailwind 기본 `blue-600` 과 일반 `rounded-lg shadow` 카드로 전혀 다른 얼굴이었음. D-032 미션("유저의 두 근본 문제 해결")을 위해서도 마케팅→대시보드 전환 시 같은 제품을 쓰고 있다는 즉각적 신호가 중요.
+- **Decision:** 대시보드 `layout()` 의 `tailwind.config.extend` 에 사이트와 동일한 `ink`·`accent`·`fontFamily` 토큰을 추가하고, 전체 UI 에서 다음을 일괄 스왑.
+  - `blue-600/700` 계열 → `accent`, `accent/90` 호버
+  - 카드 컨테이너 `rounded-lg shadow` → `rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm` (사이트처럼 가벼운 그림자 + 은은한 테두리)
+  - `<style>` 블록에 `:focus-visible` accent 링 + `font-feature-settings: "ss01", "cv11"` + antialiased 정렬
+  - 로고 앞에 `w-2 h-2 rounded-full bg-accent` 도트
+  - deep analysis 강조 카드의 좌측 4px 컬러바를 `border-purple-500` → `border-l-accent`
+- **Rationale:**
+  - 최소 변경으로 최대 체감 일치 — 색과 폰트만 통일해도 "같은 제품" 인상의 80%.
+  - 대시보드 고유성(데이터 밀도, `max-w-6xl`, 작은 h1/h2, 다크모드)은 **의도적으로 보존** — 마케팅과 데이터 UI 는 목적이 달라 타이포 리듬까지 일치시키면 화면이 비효율적.
+  - 기본 그림자 → 가벼운 테두리 전환은 "정돈된 작업대" 톤을 유지하면서 사이트의 flat + subtle 감각과 정합.
+- **Alternatives considered:**
+  - ② 사이트 레이아웃까지 그대로 복제(`max-w-5xl`, 5xl 히어로 H1 등) — 데이터 밀도 손해, 반려.
+  - ③ 다크 모드용 별도 `ink-dark`/`accent-dark` 토큰 분화 — indigo-500 이 다크 배경에서도 충분한 대비를 가지므로 지금은 과잉.
+- **Scope:** `packages/dashboard/src/html.ts`·`server.ts` 색상·폰트·카드 · 테스트 정규식 업데이트 · 신규 회귀 테스트 5건. `packages/browser-extension` 은 스코프 외(별 건).
+- **관계:** D-012(번들러 없음) — Tailwind CDN 그대로 사용 · D-032(미션 정렬) — 동일 브랜드 신호가 유저의 "이 도구가 나를 위한 것" 인식 강화.
+
+---
+
 ## 취소된 결정
 *(없음 — 새 결정이 기존 것을 번복할 때 여기에 기록)*

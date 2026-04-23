@@ -37,7 +37,7 @@ export function layout(
   const navHtml = navItems
     .map(([href, key]) => {
       const url = appendLangParam(href, locale);
-      return `<a href="${url}" class="hover:text-blue-600">${escapeHtml(t(locale, key))}</a>`;
+      return `<a href="${url}" class="hover:text-accent transition-colors">${escapeHtml(t(locale, key))}</a>`;
     })
     .join('');
   const langSwitcher = renderLanguageSwitcher(locale, opts);
@@ -53,20 +53,46 @@ export function layout(
   <title>${escapeHtml(title)} · Think-Prompt</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { theme: { extend: { colors: {
-      good: '#22c55e', ok: '#eab308', weak: '#f97316', bad: '#ef4444'
-    }}}};
+    // Shared brand tokens — mirrors site/index.html so the marketing page and
+    // the local dashboard read as the same product. See D-037.
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: '#0b0d12',
+            accent: '#6366f1',
+            good: '#22c55e', ok: '#eab308', weak: '#f97316', bad: '#ef4444'
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Inter', 'sans-serif'],
+            mono: ['ui-monospace', 'SF Mono', 'Menlo', 'Monaco', 'monospace']
+          }
+        }
+      }
+    };
   </script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      font-feature-settings: "ss01", "cv11";
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
     pre { white-space: pre-wrap; word-break: break-word; }
+    :focus-visible {
+      outline: 2px solid #6366f1;
+      outline-offset: 3px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body class="bg-gray-50 dark:bg-zinc-900 dark:text-zinc-100 min-h-screen">
-  <header class="bg-white dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700">
+  <header class="bg-white dark:bg-zinc-800 border-b border-gray-100 dark:border-zinc-700">
     <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-6">
-        <a href="${appendLangParam('/', locale)}" class="text-xl font-bold">Think-Prompt</a>
+        <a href="${appendLangParam('/', locale)}" class="flex items-center gap-2 text-xl font-bold">
+          <span class="inline-block w-2 h-2 rounded-full bg-accent"></span>Think-Prompt
+        </a>
         <nav class="text-sm flex gap-4 text-gray-600 dark:text-zinc-300">
           ${navHtml}
         </nav>
@@ -366,7 +392,7 @@ export function renderDeepAnalysisSection(
           <form method="POST" action="/settings/consent" style="display:inline">
             <input type="hidden" name="decision" value="grant" />
             <input type="hidden" name="return_to" value="/prompts/${safeId}?lang=${locale}" />
-            <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700">${escapeHtml(t(locale, 'analysis.consent_grant'))}</button>
+            <button class="px-3 py-1 rounded bg-accent text-white text-xs hover:bg-accent/90 transition-colors">${escapeHtml(t(locale, 'analysis.consent_grant'))}</button>
           </form>
           <form method="POST" action="/settings/consent" style="display:inline">
             <input type="hidden" name="decision" value="revoke" />
@@ -382,7 +408,7 @@ export function renderDeepAnalysisSection(
         <form method="POST" action="/settings/consent" class="inline ml-2">
           <input type="hidden" name="decision" value="grant" />
           <input type="hidden" name="return_to" value="/prompts/${safeId}?lang=${locale}" />
-          <button class="underline hover:text-blue-600">${escapeHtml(t(locale, 'analysis.consent_change'))}</button>
+          <button class="underline hover:text-accent transition-colors">${escapeHtml(t(locale, 'analysis.consent_change'))}</button>
         </form>
       </div>`;
   }
@@ -454,7 +480,7 @@ function renderDeepAnalysisCard(a: DeepAnalysisViewRow, locale: Locale): string 
       : '';
 
   return `
-    <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4 border-l-4 border-purple-500">
+    <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4 border-l-4 border-l-accent">
       <div class="flex items-center justify-between mb-3">
         <div class="text-xs text-gray-500">
           ${escapeHtml(a.model)} · ${escapeHtml(a.created_at)}
