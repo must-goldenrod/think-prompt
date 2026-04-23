@@ -1,10 +1,10 @@
 {
-  "name": "@think-prompt/cli",
+  "name": "think-prompt",
   "version": "0.1.0",
-  "description": "Think-Prompt CLI — Claude Code prompt collector + local-first quality coach. Scan ~/.claude history, score with R001..R018 rules, deep analysis with consent.",
+  "description": "Local-first prompt coach for Claude Code — collects your prompts via hooks, scores them with rules, and shows patterns in a private dashboard. No data leaves your machine.",
   "type": "module",
   "license": "MIT",
-  "author": "Think-Prompt contributors",
+  "author": "must-goldenrod",
   "homepage": "https://github.com/must-goldenrod/think-prompt#readme",
   "repository": {
     "type": "git",
@@ -24,7 +24,9 @@
     "local-first",
     "privacy",
     "coaching",
-    "anthropic"
+    "anthropic",
+    "anti-pattern",
+    "hooks"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -32,30 +34,35 @@
   "bin": {
     "think-prompt": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md", "LICENSE"],
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm -w run build"
   },
   "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "commander": "^12.1.0",
+    "fastify": "^5.2.0",
+    "franc-min": "^6.2.0",
+    "picocolors": "^1.1.1",
+    "pino": "^9.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
     "@think-prompt/agent": "workspace:*",
     "@think-prompt/core": "workspace:*",
     "@think-prompt/dashboard": "workspace:*",
     "@think-prompt/rules": "workspace:*",
     "@think-prompt/worker": "workspace:*",
-    "commander": "^12.1.0",
-    "picocolors": "^1.1.1"
-  },
-  "devDependencies": {
-    "typescript": "^5.7.2",
     "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
 }

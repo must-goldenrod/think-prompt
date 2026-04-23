@@ -248,5 +248,33 @@
 
 ---
 
+## D-034 · npm 배포 구조: 단일 번들 + 스코프 방어 선점
+- **날짜:** 2026-04-23
+- **컨텍스트:** v0.1.0 을 npm 에 공개 배포할 시점. 모노레포는 7개 패키지(`cli / core / rules / agent / worker / dashboard / browser-extension`) 인데 이들 중 **어떤 단위로 npm 에 publish 할지** 결정 필요.
+- **대안:**
+  - ① `@think-prompt/*` 6개 패키지 모두 scoped publish — 표준 모노레포 배포. core/rules 를 라이브러리로 외부에 공개.
+  - ② 단일 `think-prompt` 언스코프드 패키지로 **5개 워크스페이스 코드를 cli dist 에 번들** — CLI 도구 관례 (vercel, pm2, biome 패턴).
+  - ③ 둘 다 publish (cli 는 thin re-export) — 유지 비용 가장 큼.
+- **결정:** **②** 채택. 추가로 **`@think-prompt` organization 만 npm 에서 무료 claim** 해서 브랜드 스쿼팅 방지.
+- **근거:**
+  - **유저 미션과의 정렬.** D-032 두 근본 문제(인지 고착 / 프롬프트 자각 부재) 해결의 표면은 **CLI + 대시보드** 단 둘. core/rules 를 라이브러리로 노출해도 미션에 직접 기여 안 함.
+  - **유지 비용.** ① 은 6 README · changesets · 6× 공개 API 계약 (Tier 1/2 내부 구조가 그대로 공개 표면이 됨) · 버전 sync 이슈. 1인 유지보수 기준 과함.
+  - **유저 멘탈 모델.** "내가 체감하는 건 대시보드뿐" — 유저 직접 피드백(2026-04-22). 5개 데몬/배관은 구현 세부이고, npm 페이지에 6개를 노출하면 혼란만 가중.
+  - **확장 가능성.** ② → ① 은 후행 추가 가능 (스코프만 잡혀있으면). ① → ② 는 이미 publish 된 패키지 deprecate · 이관 비용 발생. **회복 가능한 방향**으로 결정.
+  - **이름 가용성.** `think-prompt` (언스코프드) · `@think-prompt/*` 모두 2026-04-23 기준 미선점 확인 (npm 404).
+- **구현:**
+  - `packages/cli/tsup.config.ts` — `noExternal: [/^@think-prompt\//]` 로 5개 워크스페이스 번들.
+  - `packages/cli/package.json` — `name: "think-prompt"`, workspace deps 제거, transitive 외부 deps (`better-sqlite3`, `fastify`, `pino`, `zod`, `franc-min`, `commander`, `picocolors`) 직접 등록. `publishConfig.access: "public"`, `repository`, `license: "MIT"`, `keywords`, `homepage`, `bugs` 추가.
+  - `packages/cli/{README.md, LICENSE}` — npm 페이지 표시용. 루트 README 의 핵심 섹션 추출.
+  - 다른 5개 패키지(`@think-prompt/agent` 등) 는 `private: true` 로 모노레포 내부용으로만 유지.
+  - 유저 액션: `npm login` → https://www.npmjs.com/org/create 에서 `think-prompt` org 무료 생성 → `npm publish` (단일 패키지).
+- **영향:**
+  - 엔드유저 설치: `npm i -g think-prompt` 한 줄.
+  - 내부 리팩터(패키지 이름·구조 변경) 자유 — 공개 API 표면이 CLI 서브커맨드 출력 포맷뿐.
+  - core/rules 를 라이브러리로 쓰고 싶은 외부 요청이 누적되면 D-035 로 ① 모드 추가 가능.
+- **관계:** D-004(로컬 중심) · D-028(fail-open) · D-032(미션 정렬) 와 정합. D-001(로컬 우선) 의 npm 배포 표면을 구체화.
+
+---
+
 ## 취소된 결정
 *(없음 — 새 결정이 기존 것을 번복할 때 여기에 기록)*
