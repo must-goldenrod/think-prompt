@@ -204,9 +204,11 @@ export interface DailyBucket {
  * Inline SVG stacked bar chart. Each bar is one day, segments are tiers
  * (bottom-up: good → ok → weak → bad → n/a). Daily totals sit above the bar.
  *
- * The X-axis shows every other day label when there are more than 10 bars
- * (to avoid crowding); the full list-below-the-chart was removed at user
- * request so the chart carries the whole daily view on its own.
+ * Axis-label strategy switches by window size so 90/365/all views stay
+ * readable instead of collapsing into an unreadable MM/DD smudge:
+ *   n ≤ 10   — every day labelled
+ *   n ≤ 45   — every other day labelled + per-bar totals
+ *   n > 45   — dense mode: one YY-MM label per month boundary, no totals
  */
 export function renderDailyChart(data: DailyBucket[]): string {
   const W = 640;
@@ -224,6 +226,7 @@ export function renderDailyChart(data: DailyBucket[]): string {
   const niceMax = niceCeil(maxRaw);
   const yOf = (v: number): number => padT + innerH - (v / niceMax) * innerH;
   const xOf = (i: number): number => padL + slot * i + (slot - barW) / 2;
+  const denseMode = n > 45;
 
   const COLORS = {
     good: '#22c55e',
@@ -260,15 +263,24 @@ export function renderDailyChart(data: DailyBucket[]): string {
         seg(d.bad, COLORS.bad) +
         seg(d.na, COLORS.na);
       const totalLabel =
-        d.total > 0
+        !denseMode && d.total > 0
           ? `<text x="${x + barW / 2}" y="${runY - 4}" text-anchor="middle" font-size="10" font-family="ui-monospace, Menlo, monospace" fill="currentColor" fill-opacity="0.7">${d.total}</text>`
           : '';
-      const showLabel = n <= 10 || i % 2 === 0 || i === n - 1;
-      const [, mm, dd] = d.day.split('-');
-      const dayLabel = showLabel
-        ? `<text x="${x + barW / 2}" y="${H - padB + 14}" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.55">${mm}/${dd}</text>`
-        : '';
-      return stack + totalLabel + dayLabel;
+      const [yyyy, mm, dd] = d.day.split('-');
+      let axisLabel = '';
+      if (denseMode) {
+        const prevMonth = i > 0 ? (data[i - 1]?.day.slice(0, 7) ?? '') : '';
+        const curMonth = `${yyyy}-${mm}`;
+        if (i === 0 || curMonth !== prevMonth) {
+          axisLabel = `<text x="${x + barW / 2}" y="${H - padB + 14}" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.55">${(yyyy ?? '').slice(2)}-${mm}</text>`;
+        }
+      } else {
+        const showLabel = n <= 10 || i % 2 === 0 || i === n - 1;
+        if (showLabel) {
+          axisLabel = `<text x="${x + barW / 2}" y="${H - padB + 14}" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.55">${mm}/${dd}</text>`;
+        }
+      }
+      return stack + totalLabel + axisLabel;
     })
     .join('');
 
