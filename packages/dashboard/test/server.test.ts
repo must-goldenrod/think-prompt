@@ -423,4 +423,62 @@ describe('renderDailyChart', () => {
     const svg = renderDailyChart([]);
     expect(svg).toContain('<svg');
   });
+
+  // Dense mode (>45 bars): x-axis switches from MM/DD per-day labels to one
+  // YY-MM label per month boundary, and per-bar total counts disappear —
+  // otherwise 90/365/all windows turn the axis into an unreadable blur.
+  it('uses monthly YY-MM labels only when the window exceeds 45 days', () => {
+    const data = Array.from({ length: 90 }, (_, i) => {
+      const dt = new Date(Date.UTC(2026, 0, 15 + i));
+      return {
+        day: dt.toISOString().slice(0, 10),
+        good: 1,
+        ok: 0,
+        weak: 0,
+        bad: 0,
+        na: 0,
+        total: 1,
+      };
+    });
+    const svg = renderDailyChart(data);
+    expect(svg).not.toMatch(/>\d{2}\/\d{2}</);
+    expect(svg).toMatch(/>26-01</);
+    expect(svg).toMatch(/>26-02</);
+    expect(svg).toMatch(/>26-03</);
+  });
+
+  it('drops per-bar total labels in dense mode to avoid crowding', () => {
+    const data = Array.from({ length: 60 }, (_, i) => {
+      const dt = new Date(Date.UTC(2026, 0, 1 + i));
+      return {
+        day: dt.toISOString().slice(0, 10),
+        good: 99,
+        ok: 0,
+        weak: 0,
+        bad: 0,
+        na: 0,
+        total: 99,
+      };
+    });
+    const svg = renderDailyChart(data);
+    expect(svg).not.toContain('font-family="ui-monospace');
+  });
+
+  it('keeps MM/DD per-day labels and per-bar totals for short windows (<=45)', () => {
+    const data = Array.from({ length: 30 }, (_, i) => {
+      const dt = new Date(Date.UTC(2026, 2, 1 + i));
+      return {
+        day: dt.toISOString().slice(0, 10),
+        good: 2,
+        ok: 0,
+        weak: 0,
+        bad: 0,
+        na: 0,
+        total: 2,
+      };
+    });
+    const svg = renderDailyChart(data);
+    expect(svg).toMatch(/>03\/01</);
+    expect(svg).toContain('font-family="ui-monospace');
+  });
 });
