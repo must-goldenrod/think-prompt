@@ -14,7 +14,14 @@
   "bugs": {
     "url": "https://github.com/must-goldenrod/think-prompt/issues"
   },
-  "keywords": ["claude-code", "prompt", "prompt-engineering", "sqlite", "pii", "local-first"],
+  "keywords": [
+    "claude-code",
+    "prompt",
+    "prompt-engineering",
+    "sqlite",
+    "pii",
+    "local-first"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -32,7 +39,10 @@
       "import": "./dist/transcript/parser.js"
     }
   },
-  "files": ["dist", "migrations"],
+  "files": [
+    "dist",
+    "migrations"
+  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -55,5 +65,6 @@
     "typescript": "^5.7.2",
     "tsup": "^8.3.5",
     "vitest": "^2.1.8"
-  }
+  },
+  "private": true
 }

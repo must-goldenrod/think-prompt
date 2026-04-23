@@ -5,7 +5,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getPaths } from '@think-prompt/core';
 
@@ -36,12 +36,15 @@ export function isRunning(pid: number | null): boolean {
 }
 
 export function resolveEntry(role: Role): string {
+  // Production (bundled): cli/dist/index.js + cli/dist/daemons/<role>.js
+  const bundled = join(__dirname, 'daemons', `${role}.js`);
+  if (existsSync(bundled)) return bundled;
+
+  // Dev fallback: monorepo workspace path
   const require = createRequire(import.meta.url);
-  // Resolve the package's main entry. Works in a published npm install.
   try {
     return require.resolve(`@think-prompt/${role}`);
   } catch {
-    // Fallback: monorepo relative path (for dev).
     return require.resolve(`../../${role}/dist/index.js`);
   }
 }
