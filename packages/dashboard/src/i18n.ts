@@ -107,6 +107,7 @@ export interface Dictionary {
   'prompts.col.hits': string;
   'prompts.col.prompt': string;
   'prompts.col.created': string;
+  'prompts.hint_more': string;
 
   /* prompt detail */
   'detail.title': string;
@@ -218,6 +219,7 @@ const EN: Dictionary = {
   'prompts.col.hits': 'Hits',
   'prompts.col.prompt': 'Prompt',
   'prompts.col.created': 'Created',
+  'prompts.hint_more': 'more',
 
   'detail.title': 'Prompt',
   'detail.session': 'session',
@@ -323,6 +325,7 @@ const KO: Dictionary = {
   'prompts.col.hits': '히트',
   'prompts.col.prompt': '프롬프트',
   'prompts.col.created': '생성',
+  'prompts.hint_more': '더',
 
   'detail.title': '프롬프트',
   'detail.session': '세션',
@@ -428,6 +431,7 @@ const ZH: Dictionary = {
   'prompts.col.hits': '命中',
   'prompts.col.prompt': '提示',
   'prompts.col.created': '创建',
+  'prompts.hint_more': '项',
 
   'detail.title': '提示',
   'detail.session': '会话',
@@ -533,6 +537,7 @@ const ES: Dictionary = {
   'prompts.col.hits': 'Aciertos',
   'prompts.col.prompt': 'Prompt',
   'prompts.col.created': 'Creado',
+  'prompts.hint_more': 'más',
 
   'detail.title': 'Prompt',
   'detail.session': 'sesión',
@@ -638,6 +643,7 @@ const JA: Dictionary = {
   'prompts.col.hits': 'ヒット',
   'prompts.col.prompt': 'プロンプト',
   'prompts.col.created': '作成',
+  'prompts.hint_more': '件',
 
   'detail.title': 'プロンプト',
   'detail.session': 'セッション',

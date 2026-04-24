@@ -537,11 +537,12 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         <tbody>
           ${rows
             .map((r) => {
-              // D-046 follow-up: render EVERY rule-hit message verbatim
-              // (same wording as the detail page's "What went wrong"
-              // section) so users can scan the issues without drilling
-              // in. Previous behaviour showed only the shortTip for
-              // top_rule_id — users asked for the full catalogue.
+              // D-046 follow-up v2: show the highest-severity rule-hit
+              // message verbatim on ONE line, plus a compact "+N 더" badge
+              // when there are more. Keeps row height capped at two lines
+              // (snippet + hint) while still using the same wording as the
+              // detail page. Full list is one click away — the row is
+              // already clickable to the detail page's "What went wrong".
               let hitMessages: string[] = [];
               if (r.hit_messages_json) {
                 try {
@@ -552,18 +553,17 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                     );
                   }
                 } catch {
-                  // Malformed JSON from the aggregate — silently skip the
-                  // hint block rather than throw, the row is still usable.
+                  // Malformed aggregate — skip the hint rather than throw.
                 }
               }
+              const extraCount = Math.max(0, hitMessages.length - 1);
+              const extraBadge =
+                extraCount > 0
+                  ? ` <span class="not-italic ml-1 inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium rounded bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300 align-middle">+${extraCount} ${escapeHtml(t(locale, 'prompts.hint_more'))}</span>`
+                  : '';
               const hintLine =
                 hitMessages.length > 0
-                  ? `<div class="mt-1 space-y-0.5">${hitMessages
-                      .map(
-                        (m) =>
-                          `<div class="text-xs text-gray-600 dark:text-zinc-400 italic leading-snug break-words">→ ${escapeHtml(m)}</div>`
-                      )
-                      .join('')}</div>`
+                  ? `<div class="text-xs text-gray-600 dark:text-zinc-400 italic leading-snug mt-0.5 truncate">→ ${escapeHtml(hitMessages[0]!)}${extraBadge}</div>`
                   : '';
               return `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
                    <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap align-top">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</td>
@@ -644,16 +644,6 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const consentState = currentConfig.analysis.deep_consent;
     const analyzeEnabled = currentConfig.llm.enabled && consentState === 'granted';
 
-    // ----- Build a one-line diagnosis from the top 2 hits (highest severity) -----
-    // The rule engine already sorted hits DESC by severity. Take the first
-    // two messages and join with " · " — one compact sentence that explains
-    // WHY this score, which is what the user most needs above the fold.
-    const topHits = hits.slice(0, 2);
-    const diagnosisLine =
-      topHits.length === 0
-        ? t(locale, 'detail.no_issues_found')
-        : topHits.map((h) => h.message.trim()).join(' · ');
-
     // ----- Severity → color class for the left accent bar of lesson cards --
     const sevBar = (sev: number): string => {
       if (sev >= 3) return 'bg-red-500';
@@ -708,12 +698,16 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             <div class="text-sm text-gray-400 font-mono">/100</div>
           </div>
           <div class="flex-1 min-w-[16rem]">
-            <div class="mb-2 flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap">
               ${score ? tierBadge(score.tier, locale) : ''}
               ${score ? confidenceBadge(score.confidence, locale) : ''}
               ${score ? baselineDeltaLine(score.baseline_delta, baselineRow?.avg_final_score ?? null, locale) : ''}
             </div>
-            <div class="text-sm text-gray-700 dark:text-zinc-200 leading-relaxed">${escapeHtml(diagnosisLine)}</div>
+            ${
+              hits.length === 0
+                ? `<div class="text-sm text-gray-500 dark:text-zinc-400 leading-relaxed mt-2">${escapeHtml(t(locale, 'detail.no_issues_found'))}</div>`
+                : ''
+            }
           </div>
         </div>
         ${

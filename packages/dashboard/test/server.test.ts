@@ -885,42 +885,55 @@ describe('Prompts list · inline hints (full rule messages)', () => {
     return { id: u.id };
   }
 
-  it('renders ALL rule-hit messages verbatim on weak-tier rows', async () => {
+  it('renders only the highest-severity message plus a "+N more" badge', async () => {
+    // 3 hits → the row shows the top-severity message inline and a compact
+    // "+2 더" badge. The other two messages are NOT rendered inline (users
+    // click through to the detail page for the full list) — this keeps the
+    // table row height capped at two lines.
     await seedPromptWithHits('weak', [
       { rule_id: 'R002', severity: 3, message: '출력 형식이 지정되지 않았습니다.' },
+      { rule_id: 'R006', severity: 2, message: '성공 기준이 없습니다.' },
       { rule_id: 'R010', severity: 1, message: '출력 제약(길이/언어/범위)이 없습니다.' },
     ]);
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
     expect(res.statusCode).toBe(200);
+    // Top message rendered verbatim.
     expect(res.body).toContain('→ 출력 형식이 지정되지 않았습니다.');
-    expect(res.body).toContain('→ 출력 제약(길이/언어/범위)이 없습니다.');
+    // Badge shows +2 더 (two additional hits beyond the first).
+    expect(res.body).toContain('+2 더');
+    // Lower-severity messages are NOT inlined on the list.
+    expect(res.body).not.toContain('→ 성공 기준이 없습니다.');
+    expect(res.body).not.toContain('→ 출력 제약(길이/언어/범위)이 없습니다.');
     await app.close();
   });
 
-  it('renders the hint on good-tier rows that still carry a hit', async () => {
+  it('omits the badge when there is only one hit', async () => {
     await seedPromptWithHits('good', [
       { rule_id: 'R001', severity: 1, message: '프롬프트가 너무 짧습니다.' },
     ]);
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
     expect(res.body).toContain('→ 프롬프트가 너무 짧습니다.');
+    // No badge counter when only 1 hit.
+    expect(res.body).not.toMatch(/\+\d+ 더/);
     await app.close();
   });
 
-  it('orders messages by severity DESC (high-severity hit shown before low)', async () => {
-    // Seed two hits on the same usage — severity 4 should appear before
-    // severity 1 in the rendered HTML.
+  it('picks the highest-severity message as the inline one', async () => {
+    // Seed with the lower-severity rule listed first to confirm ordering
+    // comes from the query (severity DESC, rule_id ASC), not insertion
+    // order.
     await seedPromptWithHits('bad', [
-      { rule_id: 'R004', severity: 4, message: 'HIGH-SEVERITY-MARKER' },
       { rule_id: 'R001', severity: 1, message: 'LOW-SEVERITY-MARKER' },
+      { rule_id: 'R004', severity: 4, message: 'HIGH-SEVERITY-MARKER' },
     ]);
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
-    const hi = res.body.indexOf('HIGH-SEVERITY-MARKER');
-    const lo = res.body.indexOf('LOW-SEVERITY-MARKER');
-    expect(hi).toBeGreaterThan(-1);
-    expect(lo).toBeGreaterThan(hi);
+    // HIGH-SEVERITY is the inline arrow, LOW-SEVERITY is absorbed into +1.
+    expect(res.body).toContain('→ HIGH-SEVERITY-MARKER');
+    expect(res.body).toContain('+1 더');
+    expect(res.body).not.toContain('→ LOW-SEVERITY-MARKER');
     await app.close();
   });
 
