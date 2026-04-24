@@ -855,3 +855,145 @@ describe('dashboard favicon', () => {
     await app.close();
   });
 });
+
+// Inline improvement hint on Prompts list rows (D-043).
+describe('Prompts list · inline hint (weak/bad KO)', () => {
+  async function seedPromptWithHit(
+    tier: 'good' | 'ok' | 'weak' | 'bad',
+    ruleId: string
+  ): Promise<{ id: string }> {
+    const db = openDb();
+    upsertSession(db, { id: `s-${tier}`, cwd: '/tmp' });
+    const u = insertPromptUsage(db, {
+      session_id: `s-${tier}`,
+      prompt_text: `prompt tiered ${tier}`,
+    });
+    upsertQualityScore(db, {
+      usage_id: u.id,
+      rule_score: tier === 'good' ? 90 : tier === 'ok' ? 70 : tier === 'weak' ? 50 : 30,
+      final_score: tier === 'good' ? 90 : tier === 'ok' ? 70 : tier === 'weak' ? 50 : 30,
+      tier,
+      rules_version: 1,
+    });
+    insertRuleHit(db, {
+      usage_id: u.id,
+      rule_id: ruleId,
+      severity: 3,
+      message: 'test',
+    });
+    db.close();
+    return { id: u.id };
+  }
+
+  it('renders "→ shortTip" under weak-tier prompt rows (KO)', async () => {
+    await seedPromptWithHit('weak', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.statusCode).toBe(200);
+    // R004 shortTip = "한 번에 한 가지만 부탁하세요."
+    expect(res.body).toContain('한 번에 한 가지만 부탁하세요');
+    expect(res.body).toMatch(/→ 한 번에 한 가지만/);
+    await app.close();
+  });
+
+  it('renders "→ shortTip" under bad-tier prompt rows (KO)', async () => {
+    await seedPromptWithHit('bad', 'R010');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    // R010 shortTip = "길이 · 언어 · 범위 제약을 한 줄 추가하세요."
+    expect(res.body).toContain('길이 · 언어 · 범위 제약을 한 줄 추가하세요');
+    await app.close();
+  });
+
+  it('does NOT render hint for good-tier rows (signal preservation)', async () => {
+    await seedPromptWithHit('good', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.body).not.toContain('→ 한 번에 한 가지만');
+    await app.close();
+  });
+
+  it('does NOT render hint for ok-tier rows', async () => {
+    await seedPromptWithHit('ok', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.body).not.toContain('→ 한 번에 한 가지만');
+    await app.close();
+  });
+
+  it('skips hint for non-KO locales (examples are KO-only for now)', async () => {
+    await seedPromptWithHit('weak', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
+    expect(res.body).not.toContain('한 번에 한 가지만');
+    await app.close();
+  });
+});
+
+// Patterns to watch — Overview Top-5 recurring rule hits (D-044).
+describe('Overview · Patterns to watch', () => {
+  it('lists top recurring rule_ids sorted by hit count', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-pat', cwd: '/tmp' });
+    // Seed: R004 hits 3 prompts, R010 hits 2 prompts, R001 hits 1 prompt.
+    // Expected order: R004 > R010 > R001.
+    for (let i = 0; i < 3; i++) {
+      const u = insertPromptUsage(db, { session_id: 's-pat', prompt_text: `r4-${i}` });
+      insertRuleHit(db, { usage_id: u.id, rule_id: 'R004', severity: 3, message: 'm' });
+    }
+    for (let i = 0; i < 2; i++) {
+      const u = insertPromptUsage(db, { session_id: 's-pat', prompt_text: `r10-${i}` });
+      insertRuleHit(db, { usage_id: u.id, rule_id: 'R010', severity: 2, message: 'm' });
+    }
+    const u1 = insertPromptUsage(db, { session_id: 's-pat', prompt_text: 'r1' });
+    insertRuleHit(db, { usage_id: u1.id, rule_id: 'R001', severity: 1, message: 'm' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=ko' });
+    expect(res.statusCode).toBe(200);
+    // Section heading present (KO).
+    expect(res.body).toContain('자주 걸리는 패턴');
+    // All three rule ids appear, with R004 before R010 before R001
+    // (ordering verified via index-of checks on the body string).
+    const idx = (s: string): number => res.body.indexOf(s);
+    expect(idx('R004')).toBeGreaterThan(-1);
+    expect(idx('R010')).toBeGreaterThan(-1);
+    expect(idx('R001')).toBeGreaterThan(-1);
+    // Patterns block renders R004 (3 hits) before R010 (2 hits) before R001 (1 hit).
+    // Because rule ids also appear elsewhere (e.g. detail deep links), we scope
+    // the check to the patterns section's first occurrence.
+    const patternsStart = res.body.indexOf('자주 걸리는 패턴');
+    const patternsSlice = res.body.slice(patternsStart, patternsStart + 2000);
+    expect(patternsSlice.indexOf('R004')).toBeLessThan(patternsSlice.indexOf('R010'));
+    expect(patternsSlice.indexOf('R010')).toBeLessThan(patternsSlice.indexOf('R001'));
+    await app.close();
+  });
+
+  it('shows KO shortTip when locale=ko, falls back to description otherwise', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-patko', cwd: '/tmp' });
+    const u = insertPromptUsage(db, { session_id: 's-patko', prompt_text: 'p' });
+    insertRuleHit(db, { usage_id: u.id, rule_id: 'R004', severity: 3, message: 'm' });
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const ko = await app.inject({ method: 'GET', url: '/?lang=ko' });
+    // R004 shortTip = "한 번에 한 가지만 부탁하세요."
+    expect(ko.body).toContain('한 번에 한 가지만 부탁하세요');
+    const en = await app.inject({ method: 'GET', url: '/?lang=en' });
+    expect(en.body).toContain('Patterns to watch');
+    // EN locale: shortTip skipped → patterns section shows rule description.
+    expect(en.body).not.toContain('한 번에 한 가지만');
+    await app.close();
+  });
+
+  it('shows the empty-state copy when no hits in the 30-day window', async () => {
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/?lang=ko' });
+    expect(res.statusCode).toBe(200);
+    // Empty DB → empty-state message visible.
+    expect(res.body).toContain('최근 30일 반복 패턴 없음');
+    await app.close();
+  });
+});

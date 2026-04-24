@@ -412,6 +412,47 @@
 
 ---
 
+## D-043 · Prompts 리스트 weak/bad 행에 인라인 개선 힌트
+
+- **Date:** 2026-04-24
+- **Problem:** Prompts 리스트가 점수(85/72/…) 만 보여주고 "뭘 더 잘해서 점수를 올릴지" 는 상세 페이지를 열어야만 보임. 유저 피드백: 목록 수준에서 즉각 학습 가능해야 함.
+- **Decision:** weak · bad tier 행에 한해 `→ {shortTip}` 한 줄을 prompt snippet 아래 추가.
+  - SQL 에 `top_rule_id` 서브쿼리 추가 — 각 프롬프트의 highest-severity 룰을 한 번의 쿼리로 함께 가져옴 (N+1 회피). tie-break `rule_id ASC` 로 재렌더 안정성 확보.
+  - 렌더: tier 가 weak/bad 이고 locale 이 `ko` 일 때만 힌트 표시. `<div class="text-xs text-gray-500 italic mt-0.5 truncate">` 로 톤 절제.
+  - good · ok 행은 1줄 유지 — 합격 수준에서 nag 방지 + 테이블 밀도 보존.
+  - 비-KO 로케일은 예시 카피가 KO 만이라 생략. 영어 shortTip 은 후속.
+- **Rationale:**
+  - D-032 미션("프롬프트 자각") 직결 — "어떻게 고칠지" 가 클릭 없이 보이는 순간 유저의 행동 전환이 시작됨.
+  - D-021("조용히 기록") 과의 긴장 관리: good/ok 행에 힌트를 안 붙여 지적 빈도 통제. weak/bad 는 이미 "문제 신호" 이므로 추가 개입 정당화.
+- **Scope:** `packages/dashboard/src/server.ts` Prompts 쿼리 + 렌더 · `packages/dashboard/src/rule-examples.ts` `shortTip` 필드(18 룰) + `getRuleShortTipKo()` helper. 테스트 5건 추가.
+- **Known limits:**
+  - shortTip 은 한국어만. 다른 4 개 로케일은 예시 블록 자체가 없어 힌트 생략.
+  - top_rule_id 선택은 severity 최대값 1 건. 동률 시 rule_id ASC. 유저가 여러 심각한 이슈를 겹쳐 가진 경우 하나만 표시됨 — 디테일 페이지에서 전체 보기 가능.
+- **관계:** D-032(미션), D-040(lesson 카드의 축소 버전 — 목록 레벨로 이식).
+
+---
+
+## D-044 · Overview "자주 걸리는 패턴" Top-5 섹션
+
+- **Date:** 2026-04-24
+- **Problem:** 유저가 점수는 보이는데 "나는 어떤 실수를 자주 하는가" 를 스스로 정리할 수 없음. 한 개 프롬프트 단위 피드백(D-043) 이 있지만 패턴 차원의 자각은 별도 서피스가 필요.
+- **Decision:** Overview 에 "자주 걸리는 패턴 · 지난 30일" 섹션 추가. KPI row 아래, Daily chart 위.
+  - **쿼리**: `SELECT rule_id, COUNT(*) FROM rule_hits JOIN prompt_usages WHERE created_at >= datetime('now','-30 days') GROUP BY rule_id ORDER BY COUNT(*) DESC LIMIT 5`
+  - **렌더**: 룰별 1행 카드. severity 좌측 컬러 바 + `R{id}` + shortTip(KO) / description(기타) + 누적 건수. click 불가(aggregation이라 이동 대상 모호).
+  - **Empty state**: 30 일 간 히트 0 건이면 "최근 30일 반복 패턴 없음 — 잘하고 계세요." 안내.
+  - **배치 전략**: Overview **만**. Prompts 페이지 배너로 중복 노출하지 않음 — 두 서피스에서 같은 nag 를 두 번 하면 피로 증폭.
+- **Rationale:**
+  - "개별 프롬프트 개선 (D-043) → 패턴 자각 (D-044)" 의 두 단계 학습 루프.
+  - 30 일 창은 경험상 "습관" 이 노출되는 최소 길이. 7 일은 소음, 90 일은 오래전 이슈까지 끌어와 혼란.
+  - Top-5 = 집중 가능한 최소 단위. Top-10 은 정보 피로.
+- **Scope:** `packages/dashboard/src/server.ts` Overview 쿼리 + 섹션 렌더 · i18n 3 키 × 5 언어(`overview.patterns_to_watch`, `patterns_window`, `patterns_empty`). 테스트 3건 추가 (정렬·로케일·empty state).
+- **Known limits:**
+  - 유저가 dismiss 할 경로 없음. 첫 인상이 너무 nag 처럼 느껴지면 섹션 전체 hide 옵션 필요 — 후속.
+  - rule description 은 registry 가 현재 한국어인 케이스가 많아 비-KO 로케일 fallback 품질이 들쭉날쭉할 수 있음. 완전 i18n 은 별 과제.
+- **관계:** D-032(미션 — 인지 고착 해소의 aggregation 수준 개입), D-043(개별 프롬프트 힌트의 집계판), D-021(조용히 기록: Overview 한 곳만 노출해 톤 통제).
+
+---
+
 ## 취소된 결정
 
 ### D-026 · 자동 리라이트 전략 (단일 버전 메타 프롬프트 · accept/reject)

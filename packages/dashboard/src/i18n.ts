@@ -53,6 +53,9 @@ export interface Dictionary {
   'overview.lowest_scoring': string;
   'overview.no_scored_yet': string;
   'overview.recent': string;
+  'overview.patterns_to_watch': string;
+  'overview.patterns_window': string;
+  'overview.patterns_empty': string;
 
   /* prompts list */
   'prompts.title': string;
@@ -161,6 +164,9 @@ const EN: Dictionary = {
   'overview.lowest_scoring': 'Lowest scoring',
   'overview.no_scored_yet': 'no scored prompts yet',
   'overview.recent': 'Recent',
+  'overview.patterns_to_watch': 'Patterns to watch',
+  'overview.patterns_window': 'last 30 days',
+  'overview.patterns_empty': 'No recurring patterns — you are doing great.',
 
   'prompts.title': 'Prompts',
   'prompts.all_tiers': 'All tiers',
@@ -262,6 +268,9 @@ const KO: Dictionary = {
   'overview.lowest_scoring': '최저 점수',
   'overview.no_scored_yet': '아직 채점된 프롬프트가 없습니다',
   'overview.recent': '최근 항목',
+  'overview.patterns_to_watch': '자주 걸리는 패턴',
+  'overview.patterns_window': '지난 30일',
+  'overview.patterns_empty': '최근 30일 반복 패턴 없음 — 잘하고 계세요.',
 
   'prompts.title': '프롬프트',
   'prompts.all_tiers': '모든 등급',
@@ -363,6 +372,9 @@ const ZH: Dictionary = {
   'overview.lowest_scoring': '最低得分',
   'overview.no_scored_yet': '尚无已评分的提示',
   'overview.recent': '最近',
+  'overview.patterns_to_watch': '常见问题模式',
+  'overview.patterns_window': '过去 30 天',
+  'overview.patterns_empty': '过去 30 天无重复模式 — 做得很好。',
 
   'prompts.title': '提示',
   'prompts.all_tiers': '所有等级',
@@ -464,6 +476,9 @@ const ES: Dictionary = {
   'overview.lowest_scoring': 'Peores puntuaciones',
   'overview.no_scored_yet': 'aún no hay prompts puntuados',
   'overview.recent': 'Recientes',
+  'overview.patterns_to_watch': 'Patrones a vigilar',
+  'overview.patterns_window': 'últimos 30 días',
+  'overview.patterns_empty': 'Sin patrones recurrentes — lo estás haciendo bien.',
 
   'prompts.title': 'Prompts',
   'prompts.all_tiers': 'Todos los niveles',
@@ -565,6 +580,9 @@ const JA: Dictionary = {
   'overview.lowest_scoring': '低スコア',
   'overview.no_scored_yet': 'まだ採点されたプロンプトがありません',
   'overview.recent': '最近',
+  'overview.patterns_to_watch': '繰り返しのパターン',
+  'overview.patterns_window': '直近 30 日',
+  'overview.patterns_empty': '直近 30 日の繰り返しパターンなし — 順調です。',
 
   'prompts.title': 'プロンプト',
   'prompts.all_tiers': 'すべての品質',

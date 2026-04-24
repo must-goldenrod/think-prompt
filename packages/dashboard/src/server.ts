@@ -22,7 +22,7 @@ import {
   tierBadge,
 } from './html.js';
 import { type Locale, resolveLocale, t } from './i18n.js';
-import { getRuleExampleKo } from './rule-examples.js';
+import { getRuleExampleKo, getRuleShortTipKo } from './rule-examples.js';
 
 export interface DashboardDeps {
   config?: Config;
@@ -247,6 +247,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       )
       .all() as Array<{ id: string; snippet: string; final_score: number; tier: string }>;
 
+    // Top 5 recurring rule hits over the last 30 days — powers the
+    // "Patterns to watch" section (D-044). Pattern = which rule fires
+    // repeatedly, not which individual prompt was bad. Intended to make
+    // habits visible so users can target *one* fix instead of chasing
+    // every flagged prompt.
+    const patternRows = db
+      .prepare(
+        `SELECT rh.rule_id, COUNT(*) AS hits
+           FROM rule_hits rh
+           JOIN prompt_usages pu ON pu.id = rh.usage_id
+          WHERE pu.created_at >= datetime('now', '-30 days')
+          GROUP BY rh.rule_id
+          ORDER BY hits DESC
+          LIMIT 5`
+      )
+      .all() as Array<{ rule_id: string; hits: number }>;
+    // Severity → left bar color (same palette as the detail page lesson
+    // cards so the visual language stays consistent).
+    const patternSevBar = (ruleId: string): string => {
+      const def = getRulesCatalog().find((r) => r.id === ruleId);
+      const sev = def?.severity ?? 1;
+      if (sev >= 3) return 'bg-red-500';
+      if (sev === 2) return 'bg-orange-500';
+      return 'bg-yellow-500';
+    };
+
     // Tier tiles — each tier gets its own card with a big mono number, matching
     // the "Total prompts" card's visual weight so all 6 (Total + 5 tiers) scan
     // as a single glanceable KPI row. Left color bar = tier identity; percentage
@@ -300,6 +326,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           <div class="text-xs text-gray-400 mt-1">${escapeHtml(t(locale, 'overview.last_n_days', { n: DAYS }))}: ${windowTotal.toLocaleString()}</div>
         </div>
         ${tierTilesHtml}
+      </section>
+
+      <!-- Patterns to watch — top 5 recurring rule hits over last 30 days -->
+      <section class="mb-8">
+        <h2 class="text-lg font-bold mb-3 flex items-baseline gap-2">
+          ${escapeHtml(t(locale, 'overview.patterns_to_watch'))}
+          <span class="text-xs font-normal text-gray-500">${escapeHtml(t(locale, 'overview.patterns_window'))}</span>
+        </h2>
+        ${
+          patternRows.length === 0
+            ? `<div class="text-gray-400 text-sm">${escapeHtml(t(locale, 'overview.patterns_empty'))}</div>`
+            : `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 overflow-hidden">${patternRows
+                .map((p) => {
+                  const shortTip = locale === 'ko' ? getRuleShortTipKo(p.rule_id) : null;
+                  const ruleDef = getRulesCatalog().find((r) => r.id === p.rule_id);
+                  const fallback = ruleDef?.description ?? p.rule_id;
+                  const line = shortTip ?? fallback;
+                  return `<div class="relative flex items-center gap-3 p-3 pl-5">
+                    <div class="absolute left-0 top-0 h-full w-1 ${patternSevBar(p.rule_id)}"></div>
+                    <span class="font-mono text-xs font-semibold w-12 text-gray-700 dark:text-zinc-200">${escapeHtml(p.rule_id)}</span>
+                    <span class="text-sm text-gray-700 dark:text-zinc-200 flex-1 truncate">${escapeHtml(line)}</span>
+                    <span class="text-xs font-mono text-gray-400 tabular-nums">${p.hits}</span>
+                  </div>`;
+                })
+                .join('')}</div>`
+        }
       </section>
 
       <section class="mb-8">
@@ -386,7 +438,14 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         `SELECT pu.id, substr(pu.prompt_text,1,160) AS snippet, pu.created_at, pu.char_len,
                 COALESCE(qs.final_score, -1) AS score, COALESCE(qs.tier, 'n/a') AS tier,
                 COALESCE(s.source, 'claude-code') AS source,
-                (SELECT COUNT(*) FROM rule_hits rh WHERE rh.usage_id=pu.id) AS hits
+                (SELECT COUNT(*) FROM rule_hits rh WHERE rh.usage_id=pu.id) AS hits,
+                -- Top hit = highest severity, ties broken by rule_id ASC so the
+                -- inline hint is stable across re-renders. Used only for
+                -- weak/bad tier rows (D-043).
+                (SELECT rule_id FROM rule_hits rh
+                  WHERE rh.usage_id = pu.id
+                  ORDER BY rh.severity DESC, rh.rule_id ASC
+                  LIMIT 1) AS top_rule_id
            FROM prompt_usages pu
            LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
            LEFT JOIN sessions s ON s.id = pu.session_id
@@ -402,6 +461,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       tier: string;
       source: string;
       hits: number;
+      top_rule_id: string | null;
     }>;
 
     const sourceOptions = [
@@ -451,16 +511,25 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         </thead>
         <tbody>
           ${rows
-            .map(
-              (r) =>
-                `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
-                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap">${escapeHtml(r.created_at)}</td>
-                   <td class="p-2 font-mono">${r.score >= 0 ? r.score : '-'}</td>
-                   <td class="p-2">${tierBadge(r.tier, locale)}</td>
-                   <td class="p-2 text-xs text-gray-600 dark:text-zinc-300">${escapeHtml(r.source)}</td>
-                   <td class="p-2 truncate max-w-[32rem]">${escapeHtml(r.snippet)}</td>
-                 </tr>`
-            )
+            .map((r) => {
+              // Inline improvement hint — only for weak/bad tiers, KO locale.
+              // Other tiers stay single-line to keep the table dense.
+              const showHint = (r.tier === 'weak' || r.tier === 'bad') && locale === 'ko';
+              const shortTip = showHint && r.top_rule_id ? getRuleShortTipKo(r.top_rule_id) : null;
+              const hintLine = shortTip
+                ? `<div class="text-xs text-gray-500 dark:text-zinc-400 italic mt-0.5 truncate">→ ${escapeHtml(shortTip)}</div>`
+                : '';
+              return `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
+                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap align-top">${escapeHtml(r.created_at)}</td>
+                   <td class="p-2 font-mono align-top">${r.score >= 0 ? r.score : '-'}</td>
+                   <td class="p-2 align-top">${tierBadge(r.tier, locale)}</td>
+                   <td class="p-2 text-xs text-gray-600 dark:text-zinc-300 align-top">${escapeHtml(r.source)}</td>
+                   <td class="p-2 max-w-[32rem] align-top">
+                     <div class="truncate">${escapeHtml(r.snippet)}</div>
+                     ${hintLine}
+                   </td>
+                 </tr>`;
+            })
             .join('')}
         </tbody>
       </table>`;
