@@ -537,12 +537,10 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         <tbody>
           ${rows
             .map((r) => {
-              // D-046 follow-up v2: show the highest-severity rule-hit
-              // message verbatim on ONE line, plus a compact "+N 더" badge
-              // when there are more. Keeps row height capped at two lines
-              // (snippet + hint) while still using the same wording as the
-              // detail page. Full list is one click away — the row is
-              // already clickable to the detail page's "What went wrong".
+              // D-046 follow-up v3: render every rule-hit message verbatim
+              // as its own "→ …" line (severity DESC order). Same wording
+              // as the detail page's "What went wrong" section. No badge,
+              // no truncation — full text wraps within the cell.
               let hitMessages: string[] = [];
               if (r.hit_messages_json) {
                 try {
@@ -556,14 +554,14 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                   // Malformed aggregate — skip the hint rather than throw.
                 }
               }
-              const extraCount = Math.max(0, hitMessages.length - 1);
-              const extraBadge =
-                extraCount > 0
-                  ? ` <span class="not-italic ml-1 inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium rounded bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300 align-middle">+${extraCount} ${escapeHtml(t(locale, 'prompts.hint_more'))}</span>`
-                  : '';
               const hintLine =
                 hitMessages.length > 0
-                  ? `<div class="text-xs text-gray-600 dark:text-zinc-400 italic leading-snug mt-0.5 truncate">→ ${escapeHtml(hitMessages[0]!)}${extraBadge}</div>`
+                  ? `<div class="mt-1 space-y-0.5">${hitMessages
+                      .map(
+                        (m) =>
+                          `<div class="text-xs text-gray-600 dark:text-zinc-400 italic leading-snug break-words">→ ${escapeHtml(m)}</div>`
+                      )
+                      .join('')}</div>`
                   : '';
               return `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
                    <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap align-top">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</td>
