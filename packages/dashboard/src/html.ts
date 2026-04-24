@@ -141,23 +141,38 @@ function renderLanguageSwitcher(locale: Locale, opts: LayoutOptions): string {
   const queryPrefix = new URLSearchParams(passthrough).toString();
   const sep = queryPrefix ? '&' : '';
 
+  // D-047 follow-up: native <select> used to spawn an OS dropdown whose
+  // popup ignored our viewport — in embedded browsers (VS Code terminal
+  // preview, small iframe) it overflowed the terminal area and was clipped.
+  // Replaced with a `<details>/<summary>` disclosure rendering the options
+  // as a grid inside an absolutely-positioned panel we CAN size. right-0
+  // anchors the panel to the header's right edge; max-h + overflow-auto
+  // keeps it inside the viewport at the tiniest terminal size.
   const options = (['en', 'ko', 'zh', 'es', 'ja'] as Locale[])
     .map((code) => {
       const url = `${basePath}?${queryPrefix}${sep}lang=${code}`;
-      const selected = code === locale ? ' selected' : '';
-      return `<option value="${escapeHtml(url)}"${selected}>${escapeHtml(LOCALE_LABELS[code])}</option>`;
+      const isCurrent = code === locale;
+      const cls = isCurrent
+        ? 'bg-accent/10 text-accent font-semibold'
+        : 'text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-700';
+      return `<a role="menuitemradio" aria-checked="${isCurrent}" href="${escapeHtml(url)}" class="block px-3 py-1.5 text-sm rounded ${cls}">${escapeHtml(LOCALE_LABELS[code])}</a>`;
     })
     .join('');
 
-  return `<label class="text-xs text-gray-500 flex items-center gap-2">
-    <span class="sr-only">${escapeHtml(t(locale, 'common.language'))}</span>
-    <select
-      class="text-xs border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded px-2 py-1"
-      onchange="window.location=this.value"
-      aria-label="${escapeHtml(t(locale, 'common.language'))}">
+  const current = LOCALE_LABELS[locale];
+  const languageLabel = escapeHtml(t(locale, 'common.language'));
+
+  return `<details class="relative group" aria-label="${languageLabel}">
+    <summary class="cursor-pointer select-none list-none text-xs text-gray-500 hover:text-accent flex items-center gap-1 rounded px-2 py-1 border border-transparent hover:border-gray-200 dark:hover:border-zinc-600">
+      <span class="sr-only">${languageLabel}</span>
+      <span aria-hidden="true">🌐</span>
+      <span>${escapeHtml(current)}</span>
+      <span class="text-[8px] opacity-60 group-open:rotate-180 transition-transform" aria-hidden="true">▼</span>
+    </summary>
+    <div role="menu" class="absolute right-0 mt-1 py-1 px-1 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg z-50 w-40 max-h-[70vh] overflow-auto space-y-0.5">
       ${options}
-    </select>
-  </label>`;
+    </div>
+  </details>`;
 }
 
 /**

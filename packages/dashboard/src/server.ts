@@ -458,7 +458,18 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                 (SELECT rule_id FROM rule_hits rh
                   WHERE rh.usage_id = pu.id
                   ORDER BY rh.severity DESC, rh.rule_id ASC
-                  LIMIT 1) AS top_rule_id
+                  LIMIT 1) AS top_rule_id,
+                -- D-046 follow-up: surface ALL rule-hit messages on the
+                -- Prompts list so users see the same verbatim wording as
+                -- on the detail page's "What went wrong" section. json
+                -- array preserves order (severity DESC, rule_id ASC).
+                (SELECT json_group_array(message)
+                   FROM (
+                     SELECT message FROM rule_hits rh2
+                      WHERE rh2.usage_id = pu.id
+                      ORDER BY rh2.severity DESC, rh2.rule_id ASC
+                   )
+                ) AS hit_messages_json
            FROM prompt_usages pu
            LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
            LEFT JOIN sessions s ON s.id = pu.session_id
@@ -475,6 +486,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       source: string;
       hits: number;
       top_rule_id: string | null;
+      hit_messages_json: string | null;
     }>;
 
     const sourceOptions = [
@@ -525,17 +537,34 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         <tbody>
           ${rows
             .map((r) => {
-              // Inline improvement hint — shown whenever the row has at
-              // least one rule hit, any tier. D-045 supersedes D-043's
-              // weak/bad-only restriction: good-tier rows with no hits
-              // stay single-line naturally (top_rule_id = null), while
-              // ok/weak/bad rows gain one line of "what to improve next
-              // time" so users can scan the whole list without drilling in.
-              const shortTip =
-                locale === 'ko' && r.top_rule_id ? getRuleShortTipKo(r.top_rule_id) : null;
-              const hintLine = shortTip
-                ? `<div class="text-xs text-gray-500 dark:text-zinc-400 italic mt-0.5 truncate">→ ${escapeHtml(shortTip)}</div>`
-                : '';
+              // D-046 follow-up: render EVERY rule-hit message verbatim
+              // (same wording as the detail page's "What went wrong"
+              // section) so users can scan the issues without drilling
+              // in. Previous behaviour showed only the shortTip for
+              // top_rule_id — users asked for the full catalogue.
+              let hitMessages: string[] = [];
+              if (r.hit_messages_json) {
+                try {
+                  const parsed = JSON.parse(r.hit_messages_json) as unknown;
+                  if (Array.isArray(parsed)) {
+                    hitMessages = parsed.filter(
+                      (m): m is string => typeof m === 'string' && m.length > 0
+                    );
+                  }
+                } catch {
+                  // Malformed JSON from the aggregate — silently skip the
+                  // hint block rather than throw, the row is still usable.
+                }
+              }
+              const hintLine =
+                hitMessages.length > 0
+                  ? `<div class="mt-1 space-y-0.5">${hitMessages
+                      .map(
+                        (m) =>
+                          `<div class="text-xs text-gray-600 dark:text-zinc-400 italic leading-snug break-words">→ ${escapeHtml(m)}</div>`
+                      )
+                      .join('')}</div>`
+                  : '';
               return `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
                    <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap align-top">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</td>
                    <td class="p-2 font-mono align-top">${r.score >= 0 ? r.score : '-'}</td>

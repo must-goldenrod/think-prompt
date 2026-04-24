@@ -856,11 +856,14 @@ describe('dashboard favicon', () => {
   });
 });
 
-// Inline improvement hint on Prompts list rows (D-043).
-describe('Prompts list · inline hint (weak/bad KO)', () => {
-  async function seedPromptWithHit(
+// Inline improvement hint on Prompts list rows (D-043 → D-046 follow-up).
+// D-046: the inline hint now surfaces EVERY rule-hit message verbatim (same
+// wording as the detail page's "What went wrong" section), regardless of
+// locale. Tier-gated shortTip UX was replaced per user request.
+describe('Prompts list · inline hints (full rule messages)', () => {
+  async function seedPromptWithHits(
     tier: 'good' | 'ok' | 'weak' | 'bad',
-    ruleId: string
+    hits: Array<{ rule_id: string; severity: number; message: string }>
   ): Promise<{ id: string }> {
     const db = openDb();
     upsertSession(db, { id: `s-${tier}`, cwd: '/tmp' });
@@ -875,57 +878,63 @@ describe('Prompts list · inline hint (weak/bad KO)', () => {
       tier,
       rules_version: 1,
     });
-    insertRuleHit(db, {
-      usage_id: u.id,
-      rule_id: ruleId,
-      severity: 3,
-      message: 'test',
-    });
+    for (const h of hits) {
+      insertRuleHit(db, { usage_id: u.id, ...h });
+    }
     db.close();
     return { id: u.id };
   }
 
-  it('renders "→ shortTip" under weak-tier prompt rows (KO)', async () => {
-    await seedPromptWithHit('weak', 'R004');
+  it('renders ALL rule-hit messages verbatim on weak-tier rows', async () => {
+    await seedPromptWithHits('weak', [
+      { rule_id: 'R002', severity: 3, message: '출력 형식이 지정되지 않았습니다.' },
+      { rule_id: 'R010', severity: 1, message: '출력 제약(길이/언어/범위)이 없습니다.' },
+    ]);
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
     expect(res.statusCode).toBe(200);
-    // R004 shortTip = "한 번에 한 가지만 부탁하세요."
-    expect(res.body).toContain('한 번에 한 가지만 부탁하세요');
-    expect(res.body).toMatch(/→ 한 번에 한 가지만/);
+    expect(res.body).toContain('→ 출력 형식이 지정되지 않았습니다.');
+    expect(res.body).toContain('→ 출력 제약(길이/언어/범위)이 없습니다.');
     await app.close();
   });
 
-  it('renders "→ shortTip" under bad-tier prompt rows (KO)', async () => {
-    await seedPromptWithHit('bad', 'R010');
+  it('renders the hint on good-tier rows that still carry a hit', async () => {
+    await seedPromptWithHits('good', [
+      { rule_id: 'R001', severity: 1, message: '프롬프트가 너무 짧습니다.' },
+    ]);
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
-    // R010 shortTip = "길이 · 언어 · 범위 제약을 한 줄 추가하세요."
-    expect(res.body).toContain('길이 · 언어 · 범위 제약을 한 줄 추가하세요');
+    expect(res.body).toContain('→ 프롬프트가 너무 짧습니다.');
     await app.close();
   });
 
-  // D-045 supersedes D-043's weak/bad-only restriction. Any row with a
-  // rule hit now shows its shortTip, regardless of tier — so users can
-  // scan the list and see "what to improve next time" for every
-  // imperfect prompt, not just the worst ones.
-  it('renders hint for good-tier rows that still have a rule hit', async () => {
-    await seedPromptWithHit('good', 'R004');
+  it('orders messages by severity DESC (high-severity hit shown before low)', async () => {
+    // Seed two hits on the same usage — severity 4 should appear before
+    // severity 1 in the rendered HTML.
+    await seedPromptWithHits('bad', [
+      { rule_id: 'R004', severity: 4, message: 'HIGH-SEVERITY-MARKER' },
+      { rule_id: 'R001', severity: 1, message: 'LOW-SEVERITY-MARKER' },
+    ]);
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
-    expect(res.body).toContain('→ 한 번에 한 가지만');
+    const hi = res.body.indexOf('HIGH-SEVERITY-MARKER');
+    const lo = res.body.indexOf('LOW-SEVERITY-MARKER');
+    expect(hi).toBeGreaterThan(-1);
+    expect(lo).toBeGreaterThan(hi);
     await app.close();
   });
 
-  it('renders hint for ok-tier rows', async () => {
-    await seedPromptWithHit('ok', 'R004');
+  it('renders messages in every locale (no KO-only gate)', async () => {
+    await seedPromptWithHits('weak', [
+      { rule_id: 'R002', severity: 3, message: 'Output format not specified.' },
+    ]);
     const app = buildDashboardServer({ rootOverride: tmp });
-    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
-    expect(res.body).toContain('→ 한 번에 한 가지만');
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
+    expect(res.body).toContain('→ Output format not specified.');
     await app.close();
   });
 
-  it('does NOT render hint when a prompt has no rule hits', async () => {
+  it('does NOT render an arrow row when a prompt has no rule hits', async () => {
     const db = openDb();
     upsertSession(db, { id: 's-clean', cwd: '/tmp' });
     const u = insertPromptUsage(db, {
@@ -939,21 +948,11 @@ describe('Prompts list · inline hint (weak/bad KO)', () => {
       tier: 'good',
       rules_version: 1,
     });
-    // Note: intentionally NO insertRuleHit — the prompt passed every rule.
     db.close();
 
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
-    // Rows without any rule hit keep the snippet as a single line.
     expect(res.body).not.toContain('→');
-    await app.close();
-  });
-
-  it('skips hint for non-KO locales (examples are KO-only for now)', async () => {
-    await seedPromptWithHit('weak', 'R004');
-    const app = buildDashboardServer({ rootOverride: tmp });
-    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
-    expect(res.body).not.toContain('한 번에 한 가지만');
     await app.close();
   });
 });
