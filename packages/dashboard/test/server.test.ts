@@ -905,19 +905,47 @@ describe('Prompts list · inline hint (weak/bad KO)', () => {
     await app.close();
   });
 
-  it('does NOT render hint for good-tier rows (signal preservation)', async () => {
+  // D-045 supersedes D-043's weak/bad-only restriction. Any row with a
+  // rule hit now shows its shortTip, regardless of tier — so users can
+  // scan the list and see "what to improve next time" for every
+  // imperfect prompt, not just the worst ones.
+  it('renders hint for good-tier rows that still have a rule hit', async () => {
     await seedPromptWithHit('good', 'R004');
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
-    expect(res.body).not.toContain('→ 한 번에 한 가지만');
+    expect(res.body).toContain('→ 한 번에 한 가지만');
     await app.close();
   });
 
-  it('does NOT render hint for ok-tier rows', async () => {
+  it('renders hint for ok-tier rows', async () => {
     await seedPromptWithHit('ok', 'R004');
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
-    expect(res.body).not.toContain('→ 한 번에 한 가지만');
+    expect(res.body).toContain('→ 한 번에 한 가지만');
+    await app.close();
+  });
+
+  it('does NOT render hint when a prompt has no rule hits', async () => {
+    const db = openDb();
+    upsertSession(db, { id: 's-clean', cwd: '/tmp' });
+    const u = insertPromptUsage(db, {
+      session_id: 's-clean',
+      prompt_text: 'clean prompt no hits',
+    });
+    upsertQualityScore(db, {
+      usage_id: u.id,
+      rule_score: 95,
+      final_score: 95,
+      tier: 'good',
+      rules_version: 1,
+    });
+    // Note: intentionally NO insertRuleHit — the prompt passed every rule.
+    db.close();
+
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    // Rows without any rule hit keep the snippet as a single line.
+    expect(res.body).not.toContain('→');
     await app.close();
   });
 
