@@ -29,6 +29,52 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   ja: '日本語',
 };
 
+/**
+ * IANA timezone per locale — chosen as the "most representative" region,
+ * not a fixed offset, so DST is handled automatically by Intl.DateTimeFormat.
+ *
+ *   ko → Asia/Seoul     (UTC+9,  no DST)
+ *   ja → Asia/Tokyo     (UTC+9,  no DST)
+ *   zh → Asia/Shanghai  (UTC+8,  no DST)
+ *   en → America/New_York (UTC-5/-4, ET with DST)
+ *   es → Europe/Madrid  (UTC+1/+2, Madrid time with DST)
+ *
+ * If a user's physical location differs (e.g. en speaker in California),
+ * this is still a sensible default — individual overrides are a follow-up.
+ */
+export const TIMEZONE_BY_LOCALE: Record<Locale, string> = {
+  en: 'America/New_York',
+  ko: 'Asia/Seoul',
+  zh: 'Asia/Shanghai',
+  es: 'Europe/Madrid',
+  ja: 'Asia/Tokyo',
+};
+
+/**
+ * Render a stored UTC ISO timestamp as `YYYY-MM-DD HH:MM:SS` in the locale's
+ * home timezone. DB rows stay in UTC; UI does the conversion at render time
+ * so language switching doesn't require a DB rewrite.
+ */
+export function formatLocalDateTime(isoUtc: string, locale: Locale): string {
+  const d = new Date(isoUtc);
+  if (Number.isNaN(d.getTime())) return isoUtc;
+  const tz = TIMEZONE_BY_LOCALE[locale] ?? 'UTC';
+  // `en-CA` gives YYYY-MM-DD, HH:MM:SS — the only built-in locale that
+  // produces ISO-style ordering without rebuilding from parts.
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 export interface Dictionary {
   /* common / chrome */
   'nav.overview': string;

@@ -21,7 +21,7 @@ import {
   renderDeepAnalysisSection,
   tierBadge,
 } from './html.js';
-import { type Locale, resolveLocale, t } from './i18n.js';
+import { type Locale, formatLocalDateTime, resolveLocale, t } from './i18n.js';
 import { getRuleExampleKo } from './rule-examples.js';
 
 export interface DashboardDeps {
@@ -342,7 +342,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                 `<a href="/prompts/${r.id}?lang=${locale}" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
                    <span class="font-mono text-sm w-10 text-right">${r.score >= 0 ? r.score : '-'}</span>
                    ${tierBadge(r.tier, locale)}
-                   <span class="text-xs text-gray-400 w-36">${escapeHtml(r.created_at)}</span>
+                   <span class="text-xs text-gray-400 w-36 font-mono whitespace-nowrap">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</span>
                    <span class="text-sm text-gray-700 dark:text-zinc-200 flex-1 truncate">${escapeHtml(r.snippet)}</span>
                  </a>`
             )
@@ -454,7 +454,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             .map(
               (r) =>
                 `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
-                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap">${escapeHtml(r.created_at)}</td>
+                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</td>
                    <td class="p-2 font-mono">${r.score >= 0 ? r.score : '-'}</td>
                    <td class="p-2">${tierBadge(r.tier, locale)}</td>
                    <td class="p-2 text-xs text-gray-600 dark:text-zinc-300">${escapeHtml(r.source)}</td>
@@ -638,7 +638,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           <div>id: ${escapeHtml(u.id)}</div>
           <div>${escapeHtml(t(locale, 'detail.session'))}: <a class="underline hover:text-accent" href="/sessions/${u.session_id}?lang=${locale}">${escapeHtml(u.session_id)}</a></div>
           <div>${u.char_len} ${escapeHtml(t(locale, 'detail.chars'))} · ${u.word_count} ${escapeHtml(t(locale, 'detail.words'))} · ${escapeHtml(t(locale, 'detail.turn'))} ${u.turn_index} · <span class="uppercase">${escapeHtml(detected)}</span></div>
-          <div>${escapeHtml(u.created_at)}</div>
+          <div>${escapeHtml(formatLocalDateTime(u.created_at, locale))}</div>
         </div>
       </details>`;
     reply.type('text/html; charset=utf-8').send(

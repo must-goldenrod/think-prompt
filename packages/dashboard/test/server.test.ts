@@ -855,3 +855,73 @@ describe('dashboard favicon', () => {
     await app.close();
   });
 });
+
+// Locale-aware Created column (D-042) — DB stores UTC ISO; UI renders
+// YYYY-MM-DD HH:MM:SS in the locale's home timezone.
+describe('Prompts table · Created column timezone', () => {
+  // Pick a fixed UTC instant with NO DST ambiguity so the assertions stay
+  // stable year-round. 2026-06-15 03:30:45 UTC → mid-summer, DST-active
+  // windows are on the other side of noon so conversions are deterministic.
+  const FIXED_UTC = '2026-06-15T03:30:45.000Z';
+
+  async function setup(): Promise<{ id: string }> {
+    const db = openDb();
+    upsertSession(db, { id: 's-tz', cwd: '/tmp' });
+    const u = insertPromptUsage(db, {
+      session_id: 's-tz',
+      prompt_text: 'tz test',
+      created_at: FIXED_UTC,
+    });
+    db.close();
+    return { id: u.id };
+  }
+
+  it('KO renders Seoul time (UTC+9): 12:30:45 on the 15th', async () => {
+    await setup();
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.body).toContain('2026-06-15 12:30:45');
+    await app.close();
+  });
+
+  it('JA renders Tokyo time (UTC+9) — same as Seoul', async () => {
+    await setup();
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ja' });
+    expect(res.body).toContain('2026-06-15 12:30:45');
+    await app.close();
+  });
+
+  it('ZH renders Shanghai time (UTC+8): 11:30:45', async () => {
+    await setup();
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=zh' });
+    expect(res.body).toContain('2026-06-15 11:30:45');
+    await app.close();
+  });
+
+  it('ES renders Madrid summer time (CEST, UTC+2): 05:30:45', async () => {
+    await setup();
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=es' });
+    expect(res.body).toContain('2026-06-15 05:30:45');
+    await app.close();
+  });
+
+  it('EN renders New York summer time (EDT, UTC-4): 2026-06-14 23:30:45', async () => {
+    await setup();
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
+    expect(res.body).toContain('2026-06-14 23:30:45');
+    await app.close();
+  });
+
+  it('does NOT render the raw UTC ISO string (no T, no Z, no milliseconds)', async () => {
+    await setup();
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    // The raw literal `2026-06-15T03:30:45.000Z` must no longer appear.
+    expect(res.body).not.toContain('2026-06-15T03:30:45.000Z');
+    await app.close();
+  });
+});

@@ -412,6 +412,35 @@
 
 ---
 
+## D-042 · Created 타임스탬프를 로케일별 IANA 타임존으로 렌더
+
+- **Date:** 2026-04-24
+- **Problem:** Prompts 테이블과 디테일 meta 의 `created_at` 이 DB 의 raw UTC ISO(`2026-06-15T03:30:45.000Z`) 그대로 노출. 유저(한국)는 "UTC 라 시차 헷갈리고 밀리초·Z suffix 노이즈" 를 지적. "언어에 따라 현지 시간으로" 를 요청.
+- **Decision:**
+  - **DB 저장은 UTC ISO 유지** — 로케일 변경해도 row 재작성 불필요.
+  - **UI 렌더 시점**에 `Intl.DateTimeFormat('en-CA', { timeZone, hour12: false, ... })` 로 `YYYY-MM-DD HH:MM:SS` 생성.
+  - **로케일 → IANA 타임존** 매핑:
+    - `ko` → `Asia/Seoul` (UTC+9)
+    - `ja` → `Asia/Tokyo` (UTC+9)
+    - `zh` → `Asia/Shanghai` (UTC+8)
+    - `en` → `America/New_York` (UTC-5/-4, DST)
+    - `es` → `Europe/Madrid` (UTC+1/+2, DST)
+  - **fixed offset 대신 IANA 이름** 사용 — DST 가 있는 en·es 에서 연중 자동 조정.
+  - 포맷 헬퍼는 `packages/dashboard/src/i18n.ts` 에 `formatLocalDateTime(iso, locale)` 로 노출 → Prompts 테이블, Overview Recent 리스트, Detail meta 3 곳에서 동일 함수 사용.
+- **Rationale:**
+  - "한국 유저는 +9, 중국은 +8, …" 의 고정 오프셋으로 구현하면 en(ET)·es(Madrid) 가 DST 전환(3월·11월) 시 1시간 어긋남. `Intl` + IANA 이름은 브라우저/Node 의 tzdata 로 무상 해결.
+  - `en-CA` 포맷 로케일은 YYYY-MM-DD 순서를 내장 — 파트를 수동 재조립하는 비용 없음.
+- **Scope:**
+  - `packages/dashboard/src/i18n.ts`: `TIMEZONE_BY_LOCALE` 맵 + `formatLocalDateTime` 함수 신규.
+  - `packages/dashboard/src/server.ts`: Prompts 테이블 `Created` 셀, Overview Recent 의 `<span>`, Detail `<details>` meta 의 `created_at` 을 모두 `formatLocalDateTime` 으로 교체.
+  - 테스트 6건 추가 (5개 로케일 각 변환 + raw UTC 미노출 회귀).
+- **Known limits:**
+  - en 이 `America/New_York` 로 고정 — 실제 en 유저가 LA/Chicago 거주 시 여전히 ET 로 표시. 개별 유저 타임존 오버라이드(config) 는 후속 과제.
+  - es 가 `Europe/Madrid` 로 고정 — Canary Islands(`Atlantic/Canary`) 유저는 1 시간 오차. 소수 케이스, 후속.
+- **관계:** D-032(미션) — "유저가 자기 프롬프트를 돌아보는" 흐름에서 시간이 즉각 읽혀야 인지 마찰 감소.
+
+---
+
 ## 취소된 결정
 
 ### D-026 · 자동 리라이트 전략 (단일 버전 메타 프롬프트 · accept/reject)

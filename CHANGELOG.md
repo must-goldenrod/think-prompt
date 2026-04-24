@@ -8,7 +8,15 @@ stability guarantees of v1.0 do not yet apply.
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Changed
+- **`created_at` timestamps are now shown in the locale's home timezone**
+  — Prompts table, Overview "Recent" list, and Detail meta all render
+  `YYYY-MM-DD HH:MM:SS` in:
+  `Asia/Seoul` (ko), `Asia/Tokyo` (ja), `Asia/Shanghai` (zh),
+  `America/New_York` (en, DST-aware), `Europe/Madrid` (es, DST-aware).
+  The DB still stores UTC ISO; conversion happens at render time via
+  `Intl.DateTimeFormat`. Raw `...T...Z` millisecond-precision strings no
+  longer surface in the UI. D-042.
 
 ---
 
