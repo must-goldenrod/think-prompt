@@ -12,6 +12,52 @@ _No unreleased changes._
 
 ---
 
+## [0.5.0] — 2026-04-24
+
+Two-stage learning loop release: **per-prompt inline hints** on the
+Prompts list (individual level) + **Patterns to watch Top-5** on
+Overview (aggregated level). Plus locale-aware timestamps across the
+dashboard.
+
+### Added
+- **Inline improvement hint on Prompts list** — every weak/bad-tier
+  row (KO locale) now shows a one-line `→ {shortTip}` under the
+  prompt snippet, derived from the highest-severity rule hit for that
+  prompt. No drill-in required to see "what to fix next time".
+  Good/ok rows stay single-line so the signal is preserved. D-043.
+- **"Patterns to watch" Top-5 on Overview** — aggregates the five
+  most frequently hit rule_ids over the last 30 days between the KPI
+  row and the Daily chart. Each entry shows a severity-colored bar,
+  the rule id, a KO `shortTip` (or description fallback for non-KO),
+  and the hit count. Empty state: "최근 30일 반복 패턴 없음 —
+  잘하고 계세요.". D-044.
+- **`shortTip` field on all 18 rule examples** — one-line imperative
+  actions (≤ 35 Korean characters). `getRuleShortTipKo(ruleId)`
+  helper exported for reuse. Feeds both D-043 and D-044 surfaces.
+- **i18n · Overview patterns section** — three new keys
+  (`overview.patterns_to_watch`, `overview.patterns_window`,
+  `overview.patterns_empty`) translated across en / ko / zh / es / ja.
+- **`created_at` timestamps shown in the locale's home timezone** —
+  Prompts table, Overview "Recent" list, and Detail meta all render
+  `YYYY-MM-DD HH:MM:SS` in `Asia/Seoul` (ko), `Asia/Tokyo` (ja),
+  `Asia/Shanghai` (zh), `America/New_York` (en, DST-aware),
+  `Europe/Madrid` (es, DST-aware). DB still stores UTC ISO; conversion
+  happens at render time via `Intl.DateTimeFormat`. Raw `...T...Z`
+  millisecond-precision strings no longer surface in the UI. D-042.
+
+### Testing
+- Dashboard suite: 58 → **66 tests** (+8 for D-043 / D-044 regression
+  coverage — ordering, locale fallback, empty state, good-tier
+  signal preservation).
+- Full suite: 226 → **234 tests**, all passing across 23 files.
+
+### Decisions logged
+- **D-042** · Locale-aware `created_at` timezone rendering.
+- **D-043** · Prompts list inline hint on weak/bad rows.
+- **D-044** · Overview "Patterns to watch" Top-5 (30-day window).
+
+---
+
 ## [0.4.0] — 2026-04-23
 
 Removes the `think-prompt rewrite` feature in response to user feedback
