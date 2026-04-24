@@ -1,4 +1,4 @@
-import { LOCALE_LABELS, type Locale, t } from './i18n.js';
+import { LOCALE_LABELS, type Locale, formatLocalDateTime, t } from './i18n.js';
 
 export function escapeHtml(s: unknown): string {
   return String(s ?? '')
@@ -461,7 +461,7 @@ function renderDeepAnalysisCard(a: DeepAnalysisViewRow, locale: Locale): string 
     return `
       <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
         <div class="text-xs text-red-700 dark:text-red-300 mb-2">
-          ${escapeHtml(t(locale, 'analysis.failed'))} · ${escapeHtml(a.created_at)}
+          ${escapeHtml(t(locale, 'analysis.failed'))} · ${escapeHtml(formatLocalDateTime(a.created_at, locale))}
         </div>
         <div class="text-xs text-gray-700 dark:text-zinc-200">${escapeHtml(a.error_message ?? '')}</div>
       </div>`;
@@ -501,7 +501,7 @@ function renderDeepAnalysisCard(a: DeepAnalysisViewRow, locale: Locale): string 
     <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4 border-l-4 border-l-accent">
       <div class="flex items-center justify-between mb-3">
         <div class="text-xs text-gray-500">
-          ${escapeHtml(a.model)} · ${escapeHtml(a.created_at)}
+          ${escapeHtml(a.model)} · ${escapeHtml(formatLocalDateTime(a.created_at, locale))}
         </div>
         ${tokens}
       </div>
