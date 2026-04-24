@@ -507,14 +507,6 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const hits = db
       .prepare(`SELECT * FROM rule_hits WHERE usage_id=? ORDER BY severity DESC`)
       .all(id) as Array<{ rule_id: string; severity: number; message: string }>;
-    const rewrites = db
-      .prepare(`SELECT * FROM rewrites WHERE usage_id=? ORDER BY created_at DESC`)
-      .all(id) as Array<{
-      status: string;
-      created_at: string;
-      after_text: string;
-      reason: string | null;
-    }>;
     const deepAnalyses = getDeepAnalyses(db, id);
     const fb = getOutcomeTotals(db, id);
     const detected = u.detected_language ?? '?';
@@ -578,15 +570,10 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             })
             .join('');
 
-    // The latest rewrite (if any) lives next to the original; anything older
-    // is shown below in the "previous rewrites" list.
-    const latestRewrite = rewrites[0];
-    const olderRewrites = rewrites.slice(1);
-
     const body = `
       <div class="mb-3"><a href="/prompts?lang=${locale}" class="text-accent text-sm hover:underline">${escapeHtml(t(locale, 'common.back'))}</a></div>
 
-      <!-- HERO · Score + one-line diagnosis + primary CTA -->
+      <!-- HERO · Score + one-line diagnosis + sub-scores -->
       <section class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm p-6 mb-6">
         <div class="flex items-start gap-5 flex-wrap">
           <div class="flex items-baseline gap-2">
@@ -598,28 +585,18 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             <div class="text-sm text-gray-700 dark:text-zinc-200 leading-relaxed">${escapeHtml(diagnosisLine)}</div>
           </div>
         </div>
-        <div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 flex items-center gap-3 flex-wrap">
-          <span class="text-xs text-gray-500">${escapeHtml(t(locale, 'detail.rewrite_cta'))}</span>
-          <code class="text-xs bg-gray-100 dark:bg-zinc-900 rounded px-2 py-1 font-mono text-gray-700 dark:text-zinc-200">think-prompt rewrite ${escapeHtml(u.id)}</code>
-          ${score ? `<span class="text-xs text-gray-400 ml-auto">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'}</span>` : ''}
-        </div>
+        ${
+          score
+            ? `<div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 text-xs text-gray-400">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'}</div>`
+            : ''
+        }
       </section>
 
-      <!-- ORIGINAL vs REWRITTEN -->
-      <section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <!-- ORIGINAL -->
+      <section class="mb-6">
         <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
           <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold mb-2">${escapeHtml(t(locale, 'detail.original'))}</div>
           <pre class="text-sm">${escapeHtml(u.prompt_text)}</pre>
-        </div>
-        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold mb-2">${escapeHtml(t(locale, 'detail.rewritten'))}</div>
-          ${
-            latestRewrite
-              ? `<pre class="text-sm">${escapeHtml(latestRewrite.after_text)}</pre>
-                 <div class="mt-2 text-xs text-gray-500">${escapeHtml(latestRewrite.status)} · ${escapeHtml(latestRewrite.created_at)}</div>
-                 ${latestRewrite.reason ? `<div class="mt-1 text-xs text-gray-500 italic">${escapeHtml(latestRewrite.reason)}</div>` : ''}`
-              : `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'detail.rewrite_none'))}</div>`
-          }
         </div>
       </section>
 
@@ -633,26 +610,6 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           ${ruleCards}
         </div>
       </section>
-
-      ${
-        olderRewrites.length > 0
-          ? `<section class="mb-6">
-              <h2 class="font-bold mb-3">${escapeHtml(t(locale, 'detail.previous_rewrites'))}</h2>
-              <div class="space-y-3">
-                ${olderRewrites
-                  .map(
-                    (r) =>
-                      `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-                         <div class="text-xs text-gray-500 mb-2">${escapeHtml(r.status)} · ${escapeHtml(r.created_at)}</div>
-                         <pre class="text-sm">${escapeHtml(r.after_text)}</pre>
-                         ${r.reason ? `<div class="mt-2 text-xs text-gray-500 italic">${escapeHtml(r.reason)}</div>` : ''}
-                       </div>`
-                  )
-                  .join('')}
-              </div>
-            </section>`
-          : ''
-      }
 
       <!-- DEEP ANALYSIS -->
       <section class="mb-6">
@@ -885,15 +842,13 @@ think-prompt coach on</pre>
            (SELECT COUNT(*) FROM prompt_usages) AS usages,
            (SELECT COUNT(*) FROM sessions) AS sessions,
            (SELECT COUNT(*) FROM quality_scores) AS scores,
-           (SELECT COUNT(*) FROM rule_hits) AS hits,
-           (SELECT COUNT(*) FROM rewrites) AS rewrites`
+           (SELECT COUNT(*) FROM rule_hits) AS hits`
       )
       .get() as {
       usages: number;
       sessions: number;
       scores: number;
       hits: number;
-      rewrites: number;
     };
     const body = `
       <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'doctor.title'))}</h1>
@@ -904,7 +859,6 @@ think-prompt coach on</pre>
           <li>sessions: ${counts.sessions}</li>
           <li>quality_scores: ${counts.scores}</li>
           <li>rule_hits: ${counts.hits}</li>
-          <li>rewrites: ${counts.rewrites}</li>
         </ul>
       </div>
       <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">

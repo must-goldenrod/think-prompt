@@ -65,7 +65,7 @@ export async function doctorCmd(): Promise<void> {
     if (key) console.log(pc.green('✓') + ` LLM enabled (model=${config.llm.model})`);
     else console.log(pc.red('✗') + ` LLM enabled but ${config.llm.api_key_env} is not set`);
   } else {
-    console.log(pc.dim('⊘ LLM disabled (judge & rewrite skipped)'));
+    console.log(pc.dim('⊘ LLM disabled (judge & deep-analysis skipped)'));
   }
 
   // Recent log errors

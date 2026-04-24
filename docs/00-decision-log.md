@@ -382,7 +382,41 @@
 
 ---
 
+## D-041 · `think-prompt rewrite` 자동 리라이트 기능 제거 (D-026 supersede)
+
+- **Date:** 2026-04-23
+- **Problem:** 유저가 대시보드 디테일 페이지에서 `think-prompt rewrite <id>` CTA 를 보고 "이 기능은 내가 원한 게 아니다" 라고 명시. 제품 원래 방향과 맞지 않는 자동 리라이트 제안이 코치 세션의 primary CTA 자리를 차지하고 있었음.
+- **Decision:** `think-prompt rewrite` 기능 전체 제거.
+  - **CLI**: `packages/cli/src/commands/rewrite.ts` 파일 삭제 · `index.ts` 의 `rewrite <id>` 커맨드 등록 제거.
+  - **Worker**: `handleRewrite` 핸들러 + `REWRITE_SYSTEM` 시스템 프롬프트 삭제 · `HANDLERS` 맵에서 `rewrite` 제거.
+  - **Queue**: `QueueJobKind` 에서 `'rewrite'` 제거.
+  - **DB**: `MIGRATION_005` 추가 — 기존 설치에서 `rewrites` 테이블 `DROP TABLE IF EXISTS` (히스토리 데이터 일괄 폐기). `CURRENT_SCHEMA_VERSION` 4 → 5.
+  - **Dashboard**: 디테일 페이지에서 "Improved" 칼럼 · 히어로 rewrite CLI CTA · "Previous rewrites" 섹션 제거. Original 은 이제 전폭 단일 카드.
+  - **Doctor**: `rewrites` 카운트 제거 · LLM disabled 힌트 "judge & rewrite" → "judge & deep-analysis".
+  - **i18n**: 5 개 키 × 5 언어 총 25 개 번역 라인 제거.
+  - **CLI show**: `rewrite` 섹션 출력 제거.
+- **Rationale:**
+  - 유저의 명시적 제품 방향 — "코칭 = 유저 자각 유도" 이지 "자동 재작성 제공" 이 아님 (D-032 미션과 정합).
+  - 자동 리라이트는 유저가 "받아쓰게" 만들어 **프롬프트 자각** 을 오히려 약화시키는 방향. 디테일 페이지의 rule-hit lesson 카드(D-040) 가 이미 "어떻게 고칠지" 를 제공하므로 중복.
+  - D-026("메타 프롬프트 단일 버전 · accept/reject 버튼") 의 전제가 더 이상 유효하지 않음 → **D-026 도 함께 취소**.
+  - 코드 축소 (~180 줄 감소) + DB 스키마 간결화 + LLM 사용처 단일화(deep analysis 만 남음).
+- **Scope:**
+  - 제거됨: CLI 커맨드 1 개 · worker handler 1 개 · DB 테이블 1 개 · 대시보드 UI 섹션 3 곳 · i18n 키 5 개 × 5 언어.
+  - **유지**: `think-prompt analyze` (D-033 deep analysis) 는 별건 기능 — consent 게이팅, 다른 DB 테이블(`deep_analyses`), 다른 UI 섹션 유지. 유저가 "deep analysis 도 제거" 라 하지 않았고, D-033 의 설계 의도(명시적 동의 하에 categorized problems + reasoning 구조화) 는 다른 축.
+- **관계:** D-026(자동 리라이트 전략) **취소**. D-032(미션 정렬) 강화. D-033(deep analysis) 무영향.
+- **Known impact:**
+  - v0.4.0 은 breaking — `think-prompt rewrite` 를 쓰던 유저 스크립트 깨짐. 0.x 시리즈이므로 허용 (CHANGELOG 도입부 명시).
+  - `rewrites` 테이블에 기록된 과거 자동 생성물은 MIGRATION_005 에서 영구 삭제. 유저가 의미 있게 참조하던 데이터 아니므로 데이터 손실 리스크 낮음.
+
+### D-026 상태: 취소 (superseded by D-041)
+
+---
+
 ## 취소된 결정
+
+### D-026 · 자동 리라이트 전략 (단일 버전 메타 프롬프트 · accept/reject)
+- **취소 이유:** 유저의 명시적 피드백 — 자동 리라이트가 원래 제품 방향이 아니며, 유저 자각을 약화시키는 방향. `think-prompt rewrite` CLI, `rewrites` 테이블, 대시보드 UI 전부 제거. D-041 로 대체.
+- **취소일:** 2026-04-23
 
 ### D-037 · 대시보드 브랜드 토큰 통일 (로컬 `site/` 기반, indigo)
 - **취소 이유:** 잘못된 브랜드 소스(`site/` 디렉터리) 를 참조. 실제 canonical 사이트(별도 repo `think-prompt-site`) 는 emerald 팔레트. D-038 로 대체.

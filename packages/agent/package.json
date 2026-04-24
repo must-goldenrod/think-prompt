@@ -1,6 +1,6 @@
 {
   "name": "@think-prompt/agent",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Think-Prompt local HTTP hook receiver (127.0.0.1:47823)",
   "type": "module",
   "license": "MIT",

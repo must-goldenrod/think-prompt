@@ -14,7 +14,6 @@ import { feedbackCmd } from './commands/feedback.js';
 import { installCmd } from './commands/install.js';
 import { listCmd } from './commands/list.js';
 import { openCmd } from './commands/open.js';
-import { rewriteCmd } from './commands/rewrite.js';
 import { showCmd } from './commands/show.js';
 import { uninstallCmd } from './commands/uninstall.js';
 import { wipeCmd } from './commands/wipe.js';
@@ -51,14 +50,10 @@ program
 program.command('show <id>').description('show prompt details by id or suffix').action(showCmd);
 
 program
-  .command('rewrite <id>')
-  .description('generate LLM rewrite suggestion (requires llm.enabled)')
-  .option('--copy', 'copy the rewrite to clipboard')
-  .action(rewriteCmd);
-
-program
   .command('analyze [id]')
-  .description('deep-analyze a prompt — problems + reasoning + rewrite (requires consent)')
+  .description(
+    'deep-analyze a prompt — problems + reasoning + suggested wording (requires consent)'
+  )
   .option('--grant-consent', 'set analysis.deep_consent=granted in config')
   .option('--revoke-consent', 'set analysis.deep_consent=denied in config')
   .action(analyzeCmd);

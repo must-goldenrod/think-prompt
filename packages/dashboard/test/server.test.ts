@@ -70,8 +70,8 @@ describe('dashboard', () => {
     await app.close();
   });
 
-  // Detail page coaching layout (D-040).
-  it('prompt detail hero shows the big score, tier and rewrite CTA', async () => {
+  // Detail page coaching layout (D-040 / D-041 — rewrite feature removed).
+  it('prompt detail hero shows the big score and tier', async () => {
     const db = openDb();
     upsertSession(db, { id: 's-hero', cwd: '/tmp' });
     const u = insertPromptUsage(db, {
@@ -90,10 +90,11 @@ describe('dashboard', () => {
     const app = buildDashboardServer({ rootOverride: tmp });
     const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
     expect(res.statusCode).toBe(200);
-    // Hero: big 5xl mono score + "/100" microlabel + rewrite CLI command
+    // Hero: big 5xl mono score + "/100" microlabel.
     expect(res.body).toMatch(/text-5xl font-mono[\s\S]{0,30}>40</);
     expect(res.body).toContain('/100');
-    expect(res.body).toContain(`think-prompt rewrite ${u.id}`);
+    // D-041: the "think-prompt rewrite" CTA has been removed.
+    expect(res.body).not.toContain('think-prompt rewrite');
     await app.close();
   });
 
@@ -130,7 +131,7 @@ describe('dashboard', () => {
     await app.close();
   });
 
-  it('prompt detail has original+rewritten two-column with empty-state copy', async () => {
+  it('prompt detail shows the original prompt text in full width (D-041: no rewrite column)', async () => {
     const db = openDb();
     upsertSession(db, { id: 's-two', cwd: '/tmp' });
     const u = insertPromptUsage(db, {
@@ -143,9 +144,9 @@ describe('dashboard', () => {
     const res = await app.inject({ method: 'GET', url: `/prompts/${u.id}?lang=en` });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('this is the original prompt text');
-    // Rewritten column exists with empty-state copy when no rewrite yet.
-    expect(res.body).toContain('Improved');
-    expect(res.body).toContain('No rewrite yet');
+    // D-041: no rewrite column, no "Improved" label, no "No rewrite yet" copy.
+    expect(res.body).not.toContain('Improved');
+    expect(res.body).not.toContain('No rewrite yet');
     await app.close();
   });
 

@@ -198,3 +198,16 @@ CREATE TABLE IF NOT EXISTS deep_analyses (
 CREATE INDEX IF NOT EXISTS idx_deep_usage ON deep_analyses(usage_id);
 CREATE INDEX IF NOT EXISTS idx_deep_created ON deep_analyses(created_at DESC);
 `;
+
+/**
+ * v0.4.0 schema change — remove the `rewrites` table.
+ *
+ * The `think-prompt rewrite` CLI command and its automatic worker job are
+ * removed in v0.4.0 (see D-041). The `rewrites` table is dropped on existing
+ * installs so the DB doesn't carry dead schema. Deep analysis (D-033) keeps
+ * its own `deep_analyses` table untouched — it's a different feature with
+ * its own consent gating.
+ */
+export const MIGRATION_005: string = `
+DROP TABLE IF EXISTS rewrites;
+`;
