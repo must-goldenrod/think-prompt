@@ -8,12 +8,13 @@ import {
   MIGRATION_003,
   MIGRATION_004,
   MIGRATION_005,
+  MIGRATION_006,
 } from './migrations/sql.js';
 import { getPaths } from './paths.js';
 import { maskPii } from './pii.js';
 import { ulid } from './ulid.js';
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 export function openDb(rootOverride?: string): Db {
   const paths = getPaths(rootOverride);
@@ -42,6 +43,7 @@ function runMigrations(db: Db): void {
     { v: 3, sql: MIGRATION_003 },
     { v: 4, sql: MIGRATION_004 },
     { v: 5, sql: MIGRATION_005 },
+    { v: 6, sql: MIGRATION_006 },
   ];
   for (const m of migrations) {
     if (m.v <= current) continue;
@@ -230,12 +232,22 @@ export interface QualityScoreInput {
   final_score: number;
   tier: 'good' | 'ok' | 'weak' | 'bad';
   rules_version: number;
+  /** D-046: extra columns — nullable so legacy callers don't have to know about them yet. */
+  efficiency_score?: number | null;
+  bonus_score?: number | null;
+  cap_applied?: number | null;
+  confidence?: 'high' | 'medium' | 'low' | null;
+  baseline_delta?: number | null;
 }
 
 export function upsertQualityScore(db: Db, s: QualityScoreInput): void {
   db.prepare(
-    `INSERT INTO quality_scores(usage_id, rule_score, usage_score, judge_score, final_score, tier, computed_at, rules_version)
-     VALUES (@usage_id,@rule_score,@usage_score,@judge_score,@final_score,@tier,@computed_at,@rules_version)
+    `INSERT INTO quality_scores(usage_id, rule_score, usage_score, judge_score, final_score, tier,
+                                computed_at, rules_version,
+                                efficiency_score, bonus_score, cap_applied, confidence, baseline_delta)
+     VALUES (@usage_id,@rule_score,@usage_score,@judge_score,@final_score,@tier,
+             @computed_at,@rules_version,
+             @efficiency_score,@bonus_score,@cap_applied,@confidence,@baseline_delta)
      ON CONFLICT(usage_id) DO UPDATE SET
        rule_score=excluded.rule_score,
        usage_score=COALESCE(excluded.usage_score, quality_scores.usage_score),
@@ -243,13 +255,120 @@ export function upsertQualityScore(db: Db, s: QualityScoreInput): void {
        final_score=excluded.final_score,
        tier=excluded.tier,
        computed_at=excluded.computed_at,
-       rules_version=excluded.rules_version`
+       rules_version=excluded.rules_version,
+       efficiency_score=COALESCE(excluded.efficiency_score, quality_scores.efficiency_score),
+       bonus_score=COALESCE(excluded.bonus_score, quality_scores.bonus_score),
+       cap_applied=COALESCE(excluded.cap_applied, quality_scores.cap_applied),
+       confidence=COALESCE(excluded.confidence, quality_scores.confidence),
+       baseline_delta=COALESCE(excluded.baseline_delta, quality_scores.baseline_delta)`
   ).run({
     ...s,
     usage_score: s.usage_score ?? null,
     judge_score: s.judge_score ?? null,
+    efficiency_score: s.efficiency_score ?? null,
+    bonus_score: s.bonus_score ?? null,
+    cap_applied: s.cap_applied ?? null,
+    confidence: s.confidence ?? null,
+    baseline_delta: s.baseline_delta ?? null,
     computed_at: new Date().toISOString(),
   });
+}
+
+/**
+ * Persist per-turn efficiency features extracted by the worker from the
+ * transcript. Columns added by MIGRATION_006 (all nullable).
+ */
+export function updateUsageEfficiencyFeatures(
+  db: Db,
+  usage_id: string,
+  f: {
+    first_shot_success?: number | null;
+    tool_call_count?: number | null;
+    follow_up_depth?: number | null;
+  }
+): void {
+  db.prepare(
+    `UPDATE prompt_usages SET
+       first_shot_success = COALESCE(?, first_shot_success),
+       tool_call_count    = COALESCE(?, tool_call_count),
+       follow_up_depth    = COALESCE(?, follow_up_depth)
+     WHERE id = ?`
+  ).run(
+    f.first_shot_success ?? null,
+    f.tool_call_count ?? null,
+    f.follow_up_depth ?? null,
+    usage_id
+  );
+}
+
+export interface BaselineSnapshotRow {
+  id: string;
+  scope: string;
+  window_days: number;
+  computed_at: string;
+  sample_size: number;
+  avg_final_score: number;
+  avg_word_count: number;
+  avg_severity_hits: number;
+}
+
+/** Compute and persist the rolling-window baseline. Returns the row if sample was large enough,
+ *  null if below the minimum sample threshold (cold-start). */
+export function recomputeBaseline(
+  db: Db,
+  opts: { scope?: string; windowDays?: number; minSamples?: number } = {}
+): BaselineSnapshotRow | null {
+  const scope = opts.scope ?? 'global';
+  const windowDays = opts.windowDays ?? 30;
+  const minSamples = opts.minSamples ?? 50;
+
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n,
+              AVG(q.final_score) AS avg_final,
+              AVG(u.word_count) AS avg_words,
+              AVG((SELECT COUNT(*) FROM rule_hits h WHERE h.usage_id = u.id AND h.severity >= 3)) AS avg_sev
+         FROM quality_scores q
+         JOIN prompt_usages u ON u.id = q.usage_id
+        WHERE u.created_at >= datetime('now', ?)`
+    )
+    .get(`-${windowDays} days`) as {
+    n: number;
+    avg_final: number | null;
+    avg_words: number | null;
+    avg_sev: number | null;
+  };
+
+  if (row.n < minSamples) return null;
+
+  const id = ulid();
+  const computed_at = new Date().toISOString();
+  const snap: BaselineSnapshotRow = {
+    id,
+    scope,
+    window_days: windowDays,
+    computed_at,
+    sample_size: row.n,
+    avg_final_score: row.avg_final ?? 0,
+    avg_word_count: row.avg_words ?? 0,
+    avg_severity_hits: row.avg_sev ?? 0,
+  };
+  db.prepare(
+    `INSERT INTO user_baseline_snapshots(id, scope, window_days, computed_at, sample_size,
+                                          avg_final_score, avg_word_count, avg_severity_hits, snapshot_json)
+     VALUES (@id,@scope,@window_days,@computed_at,@sample_size,
+             @avg_final_score,@avg_word_count,@avg_severity_hits,NULL)`
+  ).run(snap);
+  return snap;
+}
+
+export function getLatestBaseline(db: Db, scope = 'global'): BaselineSnapshotRow | null {
+  const row = db
+    .prepare(
+      `SELECT * FROM user_baseline_snapshots WHERE scope = ? ORDER BY computed_at DESC LIMIT 1`
+    )
+    .get(scope) as BaselineSnapshotRow | undefined;
+  return row ?? null;
 }
 
 export function upsertSubagent(

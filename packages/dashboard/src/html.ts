@@ -240,6 +240,52 @@ export function tierBadge(tier: string, locale: Locale = 'en'): string {
   return `<span aria-label="${escapeHtml(ariaLabel)}" class="inline-block px-2 py-0.5 text-[11px] font-mono font-semibold tracking-wider uppercase rounded ${cls}">${escapeHtml(display)}</span>`;
 }
 
+/**
+ * D-046 §6 — confidence signaling badge.
+ *
+ * Rendered next to the tier badge on the detail hero and (smaller) beside
+ * list rows. The mark is deliberately ASCII so it reads the same across all
+ * 5 locales; the aria-label exists only for accessibility.
+ *
+ *   high   → "● HIGH"
+ *   medium → "○ MED"
+ *   low    → "○ LOW · for reference"  (the "참고용" cue is the whole point)
+ */
+export function confidenceBadge(
+  confidence: string | null | undefined,
+  locale: Locale = 'en'
+): string {
+  const label = (confidence ?? '').toLowerCase();
+  if (label !== 'high' && label !== 'medium' && label !== 'low') return '';
+  const mark = label === 'high' ? '●' : '○';
+  const display = label === 'medium' ? 'MED' : label.toUpperCase();
+  const cls =
+    label === 'high'
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : label === 'low'
+        ? 'text-gray-500 dark:text-zinc-400'
+        : 'text-gray-600 dark:text-zinc-300';
+  const suffix = label === 'low' ? (locale === 'ko' ? ' · 참고용' : ' · for reference') : '';
+  const aria = `confidence: ${label}`;
+  return `<span aria-label="${escapeHtml(aria)}" class="inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wider ${cls}">${mark} ${escapeHtml(display + suffix)}</span>`;
+}
+
+/**
+ * D-046 §5 — baseline delta micro-line.
+ * Returns "" when delta is null (cold-start or not yet computed).
+ */
+export function baselineDeltaLine(
+  delta: number | null | undefined,
+  avg: number | null | undefined,
+  locale: Locale = 'en'
+): string {
+  if (delta == null || avg == null) return '';
+  const sign = delta > 0 ? '+' : '';
+  const vs = locale === 'ko' ? `내 평균 ${avg.toFixed(0)} 대비` : `vs your avg ${avg.toFixed(0)}`;
+  const tone = delta > 2 ? 'text-emerald-600' : delta < -2 ? 'text-red-600' : 'text-gray-500';
+  return `<span class="text-[11px] font-mono ${tone}">${vs} <strong>${sign}${delta}</strong></span>`;
+}
+
 export interface DailyBucket {
   day: string;
   good: number;

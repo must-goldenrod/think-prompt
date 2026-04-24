@@ -453,7 +453,86 @@
 
 ---
 
+## D-046 · 품질 스코어 = {점수·이유·확신도·개인 delta} 4-tuple 계약 (D-006 supersede)
+
+- **Date:** 2026-04-24
+- **Problem:** D-006 은 "룰 70% + 실사용 30% + (의심 시) LLM judge" 선형 가중합을 고정했다. 실제 유저 체감은 세 방향에서 어긋나 있다.
+  1. **대칭 선형의 한계.** 현재 `rule_score = 100 - Σ(severity_weight)` 는 감점 전용·대칭. 유저가 "좋은 프롬프트는 후하게, 문제 있는 프롬프트는 팍팍" 을 원해도 공식상 불가능.
+  2. **시간/효율 축 부재.** 꼼꼼한 긴 프롬프트가 늘 더 좋은 것은 아니다. 짧아도 한 방에 의도가 해결되면 의미 있는 프롬프트인데, 현재 `usage_score` 에는 그 신호가 반영되지 않는다(실패율·재사용·길이·피드백만).
+  3. **환경 변수(뉘앙스·맥락·기분·대화 이력) 처리 부재.** 동일 문장이 서로 다른 맥락에서 서로 다른 가치를 가지는데 시스템이 이를 인정하지 않고 절대 점수만 단언 → 유저가 점수에 동의하지 못하면 신뢰가 무너진다.
+- **Decision (채택 Paradigm D — Hybrid + Confidence Signaling):** 품질 평가는 단일 숫자가 아니라 **4-tuple 계약**으로 제공된다. UI·API·저장 계층 전부 이 계약을 따른다.
+
+  ```
+  { score:number, top_issue:string, confidence:'high'|'medium'|'low', delta?:number }
+  ```
+
+  공식 변경은 네 개 축으로 정의된다:
+
+  1. **비대칭 cap floor (severity ceiling).** severity 4+ 히트가 하나라도 걸리면 최종 점수에 상한선 강제.
+     - severity ≥ 5 hit → `final_score ≤ 40` (bad 고정)
+     - severity ≥ 4 hit → `final_score ≤ 60` (weak 이하)
+     - severity 3 hit ≥ 2 개 → `final_score ≤ 75`
+     → 다른 항목이 100 이어도 가리지 못함. "팍팍 떨어뜨리기" 를 구조적으로 보장.
+
+  2. **Positive signal bonus.** 감점 전용에서 탈피. 출력 포맷·성공 기준·예시·파일 경로 등 "있으면 좋은 것" 이 있을 때 **최대 +10 까지 bonus**. 감점 없고 양성 신호 있으면 100 쉽게 도달.
+
+  3. **Efficiency 축 (usage_score 의 새 지표).** Tier 2 worker 가 transcript JSONL 을 이미 파싱하므로 다음 신호를 추출해 가중 평균에 투입:
+     - **first-shot success**: 후속 프롬프트가 correction 패턴("다시/아니/취소/수정") 이 아니면 100, 있으면 감점
+     - **tool call 경제성**: 의도 대비 tool_use 수 (적을수록 좋음)
+     - **turn duration**: Stop 훅까지 경과 시간
+     `usage_score` 가중치 재편: `efficiency 0.20 + fail 0.25 + reuse 0.20 + length 0.10 + feedback 0.25` (efficiency 신규, length/fail/reuse 비중 축소).
+
+  4. **Confidence signaling.** 모든 점수에 high/medium/low 확신도 부여. 계산 근거:
+     - **high**: severity 3+ 히트 명확 AND (usage_score 존재 OR judge_score 존재), baseline 과 일치
+     - **medium**: 기본값
+     - **low**: 룰 히트는 있으나 severity 2 이하만, 또는 맥락 피처가 특이(첫 턴·매우 긴 세션 말미·correction 직후), 또는 baseline 대비 delta ±25 초과
+     → UI 는 low confidence 점수 뒤에 "참고용" 레이블을 노출해 유저가 점수에 대들 근거 제공. 시스템이 자기 한계를 인정하는 **신뢰 계약**.
+
+  5. **개인 baseline delta (Phase 3, 점진 활성화).** 유저 누적 턴 ≥ 50 이 되면 `user_baseline_snapshot` 에 rolling window 30일 기준 {avg_rule_score, avg_word_count, avg_severity_count} 저장. 점수 표시는 이중:
+     - 절대: `72 / ok (확신 높음)`
+     - delta: `당신 평균 78 대비 -6`
+     50턴 미만에서는 `calibrating...` 라벨로 정직하게 표시.
+
+- **Rationale:**
+  - **환경 변수를 "전부 반영" 도 "전부 무시" 도 실패다.** 전부 반영(LLM judge 의존) → 비용·프라이버시·불투명. 전부 무시(현재) → 기계적·불공정. 중간 길은 **"반영할 것은 피처로 쓰고 시스템이 자기 확신도를 노출"**.
+  - **moat 분석.** 룰셋(A)·LLM judge(B)·개인 캘리브레이션(C) 각각은 경쟁자가 복제 가능. 그러나 **로컬 longitudinal 데이터 + confidence signaling + 개인 baseline** 의 결합은 D-004(로컬 중심) 덕분에 복제 난이도 상승. 성공 확률 추정 A 40% / B 30% / C 50% / D 70%.
+  - **콜드스타트 2 주는 피할 수 없다.** 초기 50턴 이전엔 Phase 3/4 효과 없음 → `calibrating...` UX 로 정직하게 표시. 유저가 "아직 데이터 모으는 중" 을 이해하면 신뢰 손실 없음.
+  - **D-032(미션) 와의 정합.** "점수가 진짜 낮아야 유저가 자각한다" 는 cap floor 로, "잘 쓴 프롬프트에 자신감" 은 positive bonus 로, "프롬프트 자각" 은 confidence + delta 의 투명성으로 강화됨.
+
+- **Alternatives considered:**
+  - ① 현재 공식 미세 튜닝(severity 가중치만 재조정) — 대칭 선형의 한계를 해결 못 함. 반려.
+  - ② LLM judge 를 기본값으로 (primary scorer) — 비용·프라이버시·불투명. 반려.
+  - ③ 개인 캘리브레이션 단독 — 콜드스타트 기간 사용 불가. D 의 일부로 흡수.
+
+- **Scope / 영향:**
+  - **공식 재작성:** `docs/05-quality-engine.md` §3~§7 전면 재작성 (응당 이 D-046 과 함께 본 PR 에 포함).
+  - **schema:** `MIGRATION_006` — `prompt_usages` 에 `efficiency_score INT`, `confidence TEXT`, `baseline_delta INT` 추가. `user_baseline_snapshots(scope,window_days,computed_at,avg_final_score,avg_word_count,sample_size,snapshot_json)` 테이블 신규.
+  - **scorer.ts:** `applyCap()`, `computeEfficiencyScore()`, `computeConfidence()`, `composeFinalScore()` 확장. Tier 밴드 **90/70/50 상향** (현재 85/65/45 → 새 밴드).
+  - **신규 모듈:** `packages/core/src/baseline.ts` (rolling avg), `packages/core/src/confidence.ts`.
+  - **rules:** R001·R010·R011 severity **2 → 1** (구조/스타일 완화). R004·R012 severity **3 → 4** (다중 태스크·코드 덤프 강화). R005 유지(5).
+  - **worker:** `handleParseTranscript` 가 efficiency 피처 추출 후 `computeEfficiencyScore` 호출 → `prompt_usages.efficiency_score` 갱신 → `composeFinalScore` 재실행.
+  - **dashboard:** 디테일 페이지 hero 에 `confidence` 배지 + baseline delta 한 줄. Prompts 리스트 `tier` 셀 옆 confidence 보조 글자. 데이터 < 50 이면 상단 `calibrating…` 안내.
+  - **config:** `scorer.baseline_min_samples: 50`, `scorer.baseline_window_days: 30`, `scorer.confidence.low_delta_threshold: 25` 추가.
+
+- **Known limits / 후속:**
+  - first-shot success 추정은 휴리스틱. 유저 만족 vs 포기 구분 오탐 가능 → 초기 가중치 보수적(0.20). 1 개월 데이터로 튜닝.
+  - baseline delta 는 첫 50턴 이전 비활성. 쿠킹 기간 동안 confidence 기본 `medium`.
+  - LLM judge 트리거 조건 변경: `rule_score < 60` → `confidence == 'low'`. 비용 자연스럽게 관리됨.
+
+- **관계:**
+  - **D-006(룰 70% + 실사용 30%):** **supersede** — 아래 취소 섹션에 이전.
+  - **D-032(미션):** "인지 고착 해소 + 프롬프트 자각" 을 cap floor + confidence + delta 로 구체화.
+  - **D-004(로컬 중심):** baseline · confidence · delta 모두 로컬에서 계산. LLM judge 호출 빈도 오히려 감소.
+
+### D-006 상태: 취소 (superseded by D-046)
+
+---
+
 ## 취소된 결정
+
+### D-006 · 품질 스코어 구성 (룰 70% + 실사용 30%, LLM 심판 `rule_score < 60`)
+- **취소 이유:** 선형 대칭 가중합은 "좋은 건 더 좋게, 나쁜 건 팍팍" 을 구조적으로 표현할 수 없고, usage_score 에 시간/효율 축이 비어 있어 "짧아도 한 방에 풀린 프롬프트" 를 인정할 수 없다. 환경 변수(뉘앙스·맥락·기분) 에 대한 시스템의 자기 확신도 노출 장치도 없음. D-046 으로 대체.
+- **취소일:** 2026-04-24
 
 ### D-026 · 자동 리라이트 전략 (단일 버전 메타 프롬프트 · accept/reject)
 - **취소 이유:** 유저의 명시적 피드백 — 자동 리라이트가 원래 제품 방향이 아니며, 유저 자각을 약화시키는 방향. `think-prompt rewrite` CLI, `rewrites` 테이블, 대시보드 UI 전부 제거. D-041 로 대체.

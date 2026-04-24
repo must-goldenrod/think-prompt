@@ -7,6 +7,8 @@ export * from './lang.js';
 export * from './schema.js';
 export * from './db.js';
 export * from './scorer.js';
+export * from './baseline.js';
+export * from './confidence.js';
 export * from './queue.js';
 export * from './backfill.js';
 export * from './analysis.js';

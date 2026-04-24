@@ -15,6 +15,8 @@ import {
 import { getRulesCatalog } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import {
+  baselineDeltaLine,
+  confidenceBadge,
   escapeHtml,
   layout,
   renderDailyChart,
@@ -317,8 +319,19 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
     const chartHtml = renderDailyChart(days);
 
+    // D-046 §8 cold-start: show "calibrating… N/50" banner while personal
+    // baseline isn't yet usable. Hidden once enough data accumulates.
+    const BASELINE_MIN = 50;
+    const baselineBanner =
+      totals.c < BASELINE_MIN
+        ? `<div class="mb-6 rounded-xl border border-dashed border-gray-300 dark:border-zinc-600 bg-gray-50 dark:bg-zinc-800/60 px-4 py-3 text-sm text-gray-600 dark:text-zinc-300">${escapeHtml(
+            t(locale, 'overview.calibrating', { have: totals.c, need: BASELINE_MIN })
+          )}</div>`
+        : '';
+
     const body = `
       <h1 class="text-2xl font-bold mb-6">${escapeHtml(t(locale, 'overview.title'))}</h1>
+      ${baselineBanner}
       <section aria-label="${escapeHtml(t(locale, 'overview.tier_breakdown'))}" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5">
           <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold">${escapeHtml(t(locale, 'overview.total_prompts'))}</div>
@@ -575,8 +588,20 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           judge_score: number | null;
           final_score: number;
           tier: string;
+          confidence: string | null;
+          baseline_delta: number | null;
+          efficiency_score: number | null;
+          bonus_score: number | null;
+          cap_applied: number | null;
         }
       | undefined;
+
+    // D-046: pull latest baseline average so we can render "vs your avg N".
+    const baselineRow = db
+      .prepare(
+        `SELECT avg_final_score FROM user_baseline_snapshots ORDER BY computed_at DESC LIMIT 1`
+      )
+      .get() as { avg_final_score: number } | undefined;
     const hits = db
       .prepare(`SELECT * FROM rule_hits WHERE usage_id=? ORDER BY severity DESC`)
       .all(id) as Array<{ rule_id: string; severity: number; message: string }>;
@@ -654,13 +679,17 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             <div class="text-sm text-gray-400 font-mono">/100</div>
           </div>
           <div class="flex-1 min-w-[16rem]">
-            <div class="mb-2">${score ? tierBadge(score.tier, locale) : ''}</div>
+            <div class="mb-2 flex items-center gap-2 flex-wrap">
+              ${score ? tierBadge(score.tier, locale) : ''}
+              ${score ? confidenceBadge(score.confidence, locale) : ''}
+              ${score ? baselineDeltaLine(score.baseline_delta, baselineRow?.avg_final_score ?? null, locale) : ''}
+            </div>
             <div class="text-sm text-gray-700 dark:text-zinc-200 leading-relaxed">${escapeHtml(diagnosisLine)}</div>
           </div>
         </div>
         ${
           score
-            ? `<div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 text-xs text-gray-400">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'}</div>`
+            ? `<div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 text-xs text-gray-400">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'} · eff ${score.efficiency_score ?? '–'} · bonus ${score.bonus_score ?? 0}${score.cap_applied != null ? ` · cap ${score.cap_applied}` : ''}</div>`
             : ''
         }
       </section>

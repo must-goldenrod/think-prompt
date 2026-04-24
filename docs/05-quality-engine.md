@@ -1,7 +1,7 @@
 # 05 · 품질 엔진 (룰셋 · 스코어 · LLM 심판 · 리라이터)
 
 > 이 문서 하나로 품질 평가 로직 전부 구현 가능하도록.
-> D-006: 룰 70% + 실사용 30%. LLM 심판은 `final_score < 60` 케이스에만 trigger.
+> **D-046** (D-006 supersede): 품질 평가는 단일 숫자가 아니라 `{score, top_issue, confidence, delta}` **4-tuple 계약**. 비대칭 cap floor · positive bonus · efficiency 축 · 개인 baseline delta · confidence signaling 의 다섯 축으로 구성.
 
 ---
 
@@ -97,56 +97,130 @@ const FORMAT_KEYWORDS = [
 
 ---
 
-## 3. 품질 스코어 공식
+## 3. 품질 스코어 공식 (D-046)
 
-### 3.1 정의
-```
-final_score = round(
-  0.7 * rule_score
-  + 0.3 * usage_score
-)
-```
-- **`rule_score`**: 룰베이스 결정론 (필수)
-- **`usage_score`**: 실사용 메트릭 (없으면 스킵하고 rule_score만)
+### 3.1 정의 — 4-tuple 계약
 
-### 3.2 `rule_score` 계산
-```
-rule_score = max(0, 100 - Σ(severity_weight))
-```
-severity_weight:
-| severity | weight |
-|---|---|
-| 1 | 2 |
-| 2 | 5 |
-| 3 | 10 |
-| 4 | 18 |
-| 5 | 30 |
+점수는 항상 네 개 값을 묶어서 제공된다:
 
-### 3.3 `usage_score` 계산
-다음 지표의 가중 평균(세션 종료 후 계산). 데이터 없으면 NULL.
+```ts
+interface ScoreOutcome {
+  score:      number;                         // 0..100
+  tier:       'good' | 'ok' | 'weak' | 'bad';
+  confidence: 'high' | 'medium' | 'low';
+  delta?:     number;                         // baseline 대비 ± (데이터 쌓인 뒤)
+  top_issue?: string;                         // 한 줄 진단
+}
+```
+
+최종 점수는 아래 순서로 계산된다:
+
+```
+raw_score   = compose(rule_score, usage_score, judge_score)     (§3.4)
+bonus       = positiveBonus(signals)                            (§3.3, 최대 +10)
+capped      = applyCap(raw_score + bonus, severity_max_hit)     (§3.5)
+final_score = round(capped)
+delta       = final_score - user_baseline_snapshot.avg          (Phase 3, §5)
+confidence  = computeConfidence(hits, usage, judge, context)    (§6)
+```
+
+### 3.2 `rule_score` 계산 (감점 축)
+
+```
+rule_score_raw = max(0, 100 - Σ(severity_weight))
+```
+
+**severity_weight (D-046 반영, 룰 재조정 이후):**
+| severity | weight | 해당 룰 |
+|---|---|---|
+| 1 | 2 | R001·R008·R010·R011·R013(경미)·R018 |
+| 2 | 5 | R006·R007·R009·R013(중간)·R014·R015·R016·R017 |
+| 3 | 10 | R002·R003·R013(심각) |
+| 4 | 18 | R004·R012 |
+| 5 | 30 | R005 |
+
+### 3.3 Positive signal bonus (가점 축, D-046 신규)
+
+"있으면 좋은 것" 이 있을 때 `rule_score` 위에 최대 **+10 까지** 합산. 감점과 독립적으로 계산되며, 한 번 더해지면 `min(100, rule_score + bonus)` 로 cap.
+
+| signal | +점수 | 판정 |
+|---|---|---|
+| 출력 포맷 명시 | +3 | `FORMAT_KEYWORDS` 매칭 |
+| 성공 기준 제시 | +3 | `SUCCESS_CRITERIA_KEYWORDS` 매칭 |
+| 예시 포함 | +2 | `EXAMPLE_KEYWORDS` 매칭 (단, wordCount ≥ 40일 때) |
+| 파일 경로 / 버전 명시 | +2 | `FILE_PATH_PATTERNS` 또는 `VERSION_PATTERNS` 매칭 |
+
+합 `≤ 10`. 감점 0 + bonus 10 이면 `rule_score` 가 `100` 에 쉽게 도달.
+
+### 3.4 `usage_score` 계산 (D-046 efficiency 축 추가)
+
+```
+usage_score = 0.25*failScore + 0.20*reuseScore + 0.10*lengthScore
+            + 0.25*feedbackScore + 0.20*efficiencyScore
+```
+
 | 지표 | 계산 | 가중치 |
 |---|---|---|
-| 도구 실패율 | `1 - fail/calls` | 0.35 |
-| 재시도 비율 역수 | 같은 유사 프롬프트 반복 수 → 낮을수록 좋음 | 0.25 |
-| 응답 길이 적합성 | 요청 범위 대비 출력 길이 편차 | 0.15 |
-| 유저 피드백 | 👍/👎 명시(M6 이후) | 0.25 |
+| 도구 실패율 | `(1 - fail/calls) * 100` | **0.25** (기존 0.35) |
+| 재시도 비율 역수 | `(1 - min(1, reuse/5)) * 100` | **0.20** (기존 0.25) |
+| 응답 길이 적합성 | 범위 내 100 / 밖에서 편차 감점 | **0.10** (기존 0.15) |
+| 유저 피드백 | `ups/(ups+downs) * 100` | 0.25 (유지) |
+| **Efficiency (신규)** | §3.4.1 | **0.20** |
 
-MVP에선 상위 3개만 쓰고 피드백은 M6에서 추가.
+피드백/efficiency 모두 없으면 해당 항 가중치 제외하고 재정규화.
 
-### 3.4 Tier 매핑
-| final_score | tier | 대시보드 색 |
-|---|---|---|
-| 85–100 | good | 초록 |
-| 65–84 | ok | 노랑 |
-| 45–64 | weak | 주황 |
-| 0–44 | bad | 빨강 |
+#### 3.4.1 Efficiency 계산
+Tier 2 worker 가 transcript JSONL 파싱 시 추출:
+- **first_shot_success** (0 또는 1): 다음 턴의 프롬프트가 correction 패턴 (`/다시|아니|취소|재시도|redo|no wait/i`) 이면 0, 아니면 1. 마지막 턴은 1.
+- **tool_call_count**: 이 턴 동안 발생한 `tool_use` 이벤트 수.
+- **follow_up_depth**: 같은 의도의 연속 턴 수 (1 이 이상적).
+
+```
+efficiencyScore = clamp(0, 100,
+    firstShotSuccess * 60
+  + toolEconomyScore(tool_call_count) * 30
+  + followUpScore(follow_up_depth) * 10
+)
+```
+- `toolEconomyScore`: 0 calls → 100, 1~3 → 90, 4~8 → 75, 9~15 → 50, >15 → 25
+- `followUpScore`: 1 → 100, 2 → 70, 3 → 40, ≥4 → 20
+
+### 3.5 비대칭 cap floor (D-046 핵심)
+
+심각 룰 히트 시 상한선 강제. 다른 항목이 100 이어도 덮지 못함.
+
+```
+max_severity = max(severity in rule_hits, 0)
+severity3_count = count(hits where severity == 3)
+
+if max_severity >= 5:  cap = 40   // bad
+elif max_severity >= 4: cap = 60  // weak 이하
+elif severity3_count >= 2: cap = 75
+else: cap = 100
+
+final_score = min(raw_score + bonus, cap)
+```
+
+**왜 cap 인가:** severity weight 단순 감점으로는 severity 5 하나 + 다른 모든 요소 완벽 시 `30 점만 감점 → 70` 이 나와 "문제 있는 프롬프트" 가 `ok` tier 로 노출되는 모순. cap 은 이를 구조적으로 차단.
+
+### 3.6 Tier 매핑 (D-046 밴드 상향)
+
+| final_score | tier | 대시보드 색 | 의미 |
+|---|---|---|---|
+| 90–100 | good | 초록 | 감점 없음 + positive bonus. 자신감. |
+| 70–89 | ok | 노랑 | 경미한 개선 여지. |
+| 50–69 | weak | 주황 | 구조적 문제 또는 severity 3 히트. |
+| 0–49 | bad | 빨강 | severity 4+ 히트 또는 누적 감점 과다. |
+
+(기존: 85/65/45. good 진입 조건 강화 → positive bonus 없이는 진입 불가.)
 
 ---
 
 ## 4. LLM 심판 (Meta-Judge)
 
-### 4.1 Trigger
-- 기본값: `rule_score < 60` OR `final_score < 60` (usage 있을 때) OR R005(인젝션) 의심.
+### 4.1 Trigger (D-046 변경)
+- 기본값: **`confidence == 'low'`** (§6 참조) OR R005(인젝션) 의심. (기존 `rule_score < 60` 대체.)
+- low confidence 케이스만 잡으면 대부분의 명확한 점수는 judge 안 부르고 지나감 → 비용 자연 감소.
 - 한 프롬프트 해시당 **1회만** 호출(캐시). 룰 버전 바뀌면 재호출.
 - `llm.enabled=false`면 전부 건너뜀.
 
@@ -252,3 +326,62 @@ Return STRICT JSON:
 - 룰셋 전체 해시 = `rules_version`.
 - 스코어 행은 `rules_version` 포함 저장.
 - 룰셋 업데이트 릴리스 시 `think-prompt reprocess --all` CLI로 재채점 가능.
+
+---
+
+## 5. 개인 Baseline (D-046 Phase 3)
+
+### 5.1 계산 윈도우
+- **누적 턴 ≥ 50** 인 유저부터 활성화. 미만은 `delta = null` + UI `calibrating…` 라벨.
+- Rolling window: **최근 30일** 의 `quality_scores` 행.
+- 저장: `user_baseline_snapshots(scope, window_days, computed_at, avg_final_score, avg_word_count, sample_size, snapshot_json)`. 하루 1회 갱신 (worker 배치).
+
+### 5.2 Delta 계산
+```
+delta = final_score - snapshot.avg_final_score
+```
+- 유저 디테일 페이지: 절대 점수 옆에 `(당신 평균 78 대비 -6)` 형태.
+- 리스트: tier 배지 아래 `Δ-6` 같은 micro 표시.
+
+### 5.3 왜 개인 baseline 인가
+- 환경 변수(뉘앙스·맥락·기분·대화 이력) 는 **유저 자신의 평균과 비교** 할 때 자연스럽게 정규화됨.
+- "그날따라 짧게 쓴 프롬프트" 가 평균 대비 낮으면 유저도 납득. 다른 유저 평균과는 비교 안 함(D-004 로컬 원칙).
+
+---
+
+## 6. Confidence Signaling (D-046 Phase 4)
+
+### 6.1 판정
+```ts
+function computeConfidence(input): 'high' | 'medium' | 'low' {
+  const { max_severity, has_usage, has_judge, context_unusual, baseline_delta } = input;
+
+  // Low: 시스템이 자기 한계를 인정해야 하는 경우
+  if (context_unusual) return 'low';                  // 첫 턴, correction 직후, 매우 긴 세션 말미 등
+  if (baseline_delta != null && Math.abs(baseline_delta) > 25) return 'low';
+  if (max_severity <= 1 && !has_usage && !has_judge) return 'low'; // 신호 부족
+
+  // High: 명확한 판정
+  if (max_severity >= 3 && (has_usage || has_judge)) return 'high';
+  if (max_severity === 0 && has_usage) return 'high';
+
+  return 'medium';
+}
+```
+
+### 6.2 UI 표현
+- `high`: 점수 옆 작은 "●" (채워진 도트)
+- `medium`: "○" (빈 도트)
+- `low`: "○ 참고용" (한 줄 설명)
+
+### 6.3 왜 확신도를 노출하는가
+- **신뢰 계약.** 시스템이 자기 한계를 인정하면 유저가 점수에 대들지 않는다. 오히려 high-confidence 점수는 유저도 수용.
+- **LLM judge 트리거가 여기로 수렴.** `confidence == 'low'` 만 judge 를 호출 → 비용·프라이버시 자연 통제.
+
+---
+
+## 8. 콜드스타트 정책
+
+- **턴 수 < 50**: confidence 는 기본 `medium`, delta 비활성, UI 상단 `calibrating… (N/50)` 배너.
+- **턴 수 < 10**: Tier 밴드만 표시, 퍼센트 점수 숨김. "아직 당신 패턴을 배우는 중입니다" 문구.
+- 이 상태는 D-004(로컬 중심) · D-028(fail-open) 과 정합 — 데이터가 부족하면 과도한 단언을 하지 않는다.

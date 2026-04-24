@@ -92,6 +92,7 @@ export interface Dictionary {
   'overview.patterns_to_watch': string;
   'overview.patterns_window': string;
   'overview.patterns_empty': string;
+  'overview.calibrating': string;
 
   /* prompts list */
   'prompts.title': string;
@@ -203,6 +204,7 @@ const EN: Dictionary = {
   'overview.patterns_to_watch': 'Patterns to watch',
   'overview.patterns_window': 'last 30 days',
   'overview.patterns_empty': 'No recurring patterns — you are doing great.',
+  'overview.calibrating': 'Calibrating your baseline… {have}/{need} turns',
 
   'prompts.title': 'Prompts',
   'prompts.all_tiers': 'All tiers',
@@ -307,6 +309,7 @@ const KO: Dictionary = {
   'overview.patterns_to_watch': '자주 걸리는 패턴',
   'overview.patterns_window': '지난 30일',
   'overview.patterns_empty': '최근 30일 반복 패턴 없음 — 잘하고 계세요.',
+  'overview.calibrating': '당신의 기준선 학습 중… {have}/{need}턴',
 
   'prompts.title': '프롬프트',
   'prompts.all_tiers': '모든 등급',
@@ -411,6 +414,7 @@ const ZH: Dictionary = {
   'overview.patterns_to_watch': '常见问题模式',
   'overview.patterns_window': '过去 30 天',
   'overview.patterns_empty': '过去 30 天无重复模式 — 做得很好。',
+  'overview.calibrating': '正在校准您的基线… {have}/{need} 轮',
 
   'prompts.title': '提示',
   'prompts.all_tiers': '所有等级',
@@ -515,6 +519,7 @@ const ES: Dictionary = {
   'overview.patterns_to_watch': 'Patrones a vigilar',
   'overview.patterns_window': 'últimos 30 días',
   'overview.patterns_empty': 'Sin patrones recurrentes — lo estás haciendo bien.',
+  'overview.calibrating': 'Calibrando tu línea base… {have}/{need} turnos',
 
   'prompts.title': 'Prompts',
   'prompts.all_tiers': 'Todos los niveles',
@@ -619,6 +624,7 @@ const JA: Dictionary = {
   'overview.patterns_to_watch': '繰り返しのパターン',
   'overview.patterns_window': '直近 30 日',
   'overview.patterns_empty': '直近 30 日の繰り返しパターンなし — 順調です。',
+  'overview.calibrating': 'あなたの基準線を学習中… {have}/{need} ターン',
 
   'prompts.title': 'プロンプト',
   'prompts.all_tiers': 'すべての品質',
