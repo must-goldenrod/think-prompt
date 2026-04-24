@@ -247,6 +247,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       )
       .all() as Array<{ id: string; snippet: string; final_score: number; tier: string }>;
 
+    // Top 5 recurring rule hits over the last 30 days — powers the
+    // "Patterns to watch" section (D-044). Pattern = which rule fires
+    // repeatedly, not which individual prompt was bad. Intended to make
+    // habits visible so users can target *one* fix instead of chasing
+    // every flagged prompt.
+    const patternRows = db
+      .prepare(
+        `SELECT rh.rule_id, COUNT(*) AS hits
+           FROM rule_hits rh
+           JOIN prompt_usages pu ON pu.id = rh.usage_id
+          WHERE pu.created_at >= datetime('now', '-30 days')
+          GROUP BY rh.rule_id
+          ORDER BY hits DESC
+          LIMIT 5`
+      )
+      .all() as Array<{ rule_id: string; hits: number }>;
+    // Severity → left bar color (same palette as the detail page lesson
+    // cards so the visual language stays consistent).
+    const patternSevBar = (ruleId: string): string => {
+      const def = getRulesCatalog().find((r) => r.id === ruleId);
+      const sev = def?.severity ?? 1;
+      if (sev >= 3) return 'bg-red-500';
+      if (sev === 2) return 'bg-orange-500';
+      return 'bg-yellow-500';
+    };
+
     // Tier tiles — each tier gets its own card with a big mono number, matching
     // the "Total prompts" card's visual weight so all 6 (Total + 5 tiers) scan
     // as a single glanceable KPI row. Left color bar = tier identity; percentage
@@ -300,6 +326,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           <div class="text-xs text-gray-400 mt-1">${escapeHtml(t(locale, 'overview.last_n_days', { n: DAYS }))}: ${windowTotal.toLocaleString()}</div>
         </div>
         ${tierTilesHtml}
+      </section>
+
+      <!-- Patterns to watch — top 5 recurring rule hits over last 30 days -->
+      <section class="mb-8">
+        <h2 class="text-lg font-bold mb-3 flex items-baseline gap-2">
+          ${escapeHtml(t(locale, 'overview.patterns_to_watch'))}
+          <span class="text-xs font-normal text-gray-500">${escapeHtml(t(locale, 'overview.patterns_window'))}</span>
+        </h2>
+        ${
+          patternRows.length === 0
+            ? `<div class="text-gray-400 text-sm">${escapeHtml(t(locale, 'overview.patterns_empty'))}</div>`
+            : `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 overflow-hidden">${patternRows
+                .map((p) => {
+                  const shortTip = locale === 'ko' ? getRuleShortTipKo(p.rule_id) : null;
+                  const ruleDef = getRulesCatalog().find((r) => r.id === p.rule_id);
+                  const fallback = ruleDef?.description ?? p.rule_id;
+                  const line = shortTip ?? fallback;
+                  return `<div class="relative flex items-center gap-3 p-3 pl-5">
+                    <div class="absolute left-0 top-0 h-full w-1 ${patternSevBar(p.rule_id)}"></div>
+                    <span class="font-mono text-xs font-semibold w-12 text-gray-700 dark:text-zinc-200">${escapeHtml(p.rule_id)}</span>
+                    <span class="text-sm text-gray-700 dark:text-zinc-200 flex-1 truncate">${escapeHtml(line)}</span>
+                    <span class="text-xs font-mono text-gray-400 tabular-nums">${p.hits}</span>
+                  </div>`;
+                })
+                .join('')}</div>`
+        }
       </section>
 
       <section class="mb-8">
