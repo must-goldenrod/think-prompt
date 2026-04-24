@@ -141,23 +141,38 @@ function renderLanguageSwitcher(locale: Locale, opts: LayoutOptions): string {
   const queryPrefix = new URLSearchParams(passthrough).toString();
   const sep = queryPrefix ? '&' : '';
 
+  // D-047 follow-up: native <select> used to spawn an OS dropdown whose
+  // popup ignored our viewport — in embedded browsers (VS Code terminal
+  // preview, small iframe) it overflowed the terminal area and was clipped.
+  // Replaced with a `<details>/<summary>` disclosure rendering the options
+  // as a grid inside an absolutely-positioned panel we CAN size. right-0
+  // anchors the panel to the header's right edge; max-h + overflow-auto
+  // keeps it inside the viewport at the tiniest terminal size.
   const options = (['en', 'ko', 'zh', 'es', 'ja'] as Locale[])
     .map((code) => {
       const url = `${basePath}?${queryPrefix}${sep}lang=${code}`;
-      const selected = code === locale ? ' selected' : '';
-      return `<option value="${escapeHtml(url)}"${selected}>${escapeHtml(LOCALE_LABELS[code])}</option>`;
+      const isCurrent = code === locale;
+      const cls = isCurrent
+        ? 'bg-accent/10 text-accent font-semibold'
+        : 'text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-700';
+      return `<a role="menuitemradio" aria-checked="${isCurrent}" href="${escapeHtml(url)}" class="block px-3 py-1.5 text-sm rounded ${cls}">${escapeHtml(LOCALE_LABELS[code])}</a>`;
     })
     .join('');
 
-  return `<label class="text-xs text-gray-500 flex items-center gap-2">
-    <span class="sr-only">${escapeHtml(t(locale, 'common.language'))}</span>
-    <select
-      class="text-xs border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded px-2 py-1"
-      onchange="window.location=this.value"
-      aria-label="${escapeHtml(t(locale, 'common.language'))}">
+  const current = LOCALE_LABELS[locale];
+  const languageLabel = escapeHtml(t(locale, 'common.language'));
+
+  return `<details class="relative group" aria-label="${languageLabel}">
+    <summary class="cursor-pointer select-none list-none text-xs text-gray-500 hover:text-accent flex items-center gap-1 rounded px-2 py-1 border border-transparent hover:border-gray-200 dark:hover:border-zinc-600">
+      <span class="sr-only">${languageLabel}</span>
+      <span aria-hidden="true">🌐</span>
+      <span>${escapeHtml(current)}</span>
+      <span class="text-[8px] opacity-60 group-open:rotate-180 transition-transform" aria-hidden="true">▼</span>
+    </summary>
+    <div role="menu" class="absolute right-0 mt-1 py-1 px-1 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg z-50 w-40 max-h-[70vh] overflow-auto space-y-0.5">
       ${options}
-    </select>
-  </label>`;
+    </div>
+  </details>`;
 }
 
 /**
@@ -238,6 +253,52 @@ export function tierBadge(tier: string, locale: Locale = 'en'): string {
   const ariaLabel = t(locale, labelKey);
   const display = tier === 'n/a' ? 'N/A' : tier.toUpperCase();
   return `<span aria-label="${escapeHtml(ariaLabel)}" class="inline-block px-2 py-0.5 text-[11px] font-mono font-semibold tracking-wider uppercase rounded ${cls}">${escapeHtml(display)}</span>`;
+}
+
+/**
+ * D-046 §6 — confidence signaling badge.
+ *
+ * Rendered next to the tier badge on the detail hero and (smaller) beside
+ * list rows. The mark is deliberately ASCII so it reads the same across all
+ * 5 locales; the aria-label exists only for accessibility.
+ *
+ *   high   → "● HIGH"
+ *   medium → "○ MED"
+ *   low    → "○ LOW · for reference"  (the "참고용" cue is the whole point)
+ */
+export function confidenceBadge(
+  confidence: string | null | undefined,
+  locale: Locale = 'en'
+): string {
+  const label = (confidence ?? '').toLowerCase();
+  if (label !== 'high' && label !== 'medium' && label !== 'low') return '';
+  const mark = label === 'high' ? '●' : '○';
+  const display = label === 'medium' ? 'MED' : label.toUpperCase();
+  const cls =
+    label === 'high'
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : label === 'low'
+        ? 'text-gray-500 dark:text-zinc-400'
+        : 'text-gray-600 dark:text-zinc-300';
+  const suffix = label === 'low' ? (locale === 'ko' ? ' · 참고용' : ' · for reference') : '';
+  const aria = `confidence: ${label}`;
+  return `<span aria-label="${escapeHtml(aria)}" class="inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wider ${cls}">${mark} ${escapeHtml(display + suffix)}</span>`;
+}
+
+/**
+ * D-046 §5 — baseline delta micro-line.
+ * Returns "" when delta is null (cold-start or not yet computed).
+ */
+export function baselineDeltaLine(
+  delta: number | null | undefined,
+  avg: number | null | undefined,
+  locale: Locale = 'en'
+): string {
+  if (delta == null || avg == null) return '';
+  const sign = delta > 0 ? '+' : '';
+  const vs = locale === 'ko' ? `내 평균 ${avg.toFixed(0)} 대비` : `vs your avg ${avg.toFixed(0)}`;
+  const tone = delta > 2 ? 'text-emerald-600' : delta < -2 ? 'text-red-600' : 'text-gray-500';
+  return `<span class="text-[11px] font-mono ${tone}">${vs} <strong>${sign}${delta}</strong></span>`;
 }
 
 export interface DailyBucket {

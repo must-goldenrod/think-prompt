@@ -15,6 +15,8 @@ import {
 import { getRulesCatalog } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import {
+  baselineDeltaLine,
+  confidenceBadge,
   escapeHtml,
   layout,
   renderDailyChart,
@@ -317,8 +319,19 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
     const chartHtml = renderDailyChart(days);
 
+    // D-046 §8 cold-start: show "calibrating… N/50" banner while personal
+    // baseline isn't yet usable. Hidden once enough data accumulates.
+    const BASELINE_MIN = 50;
+    const baselineBanner =
+      totals.c < BASELINE_MIN
+        ? `<div class="mb-6 rounded-xl border border-dashed border-gray-300 dark:border-zinc-600 bg-gray-50 dark:bg-zinc-800/60 px-4 py-3 text-sm text-gray-600 dark:text-zinc-300">${escapeHtml(
+            t(locale, 'overview.calibrating', { have: totals.c, need: BASELINE_MIN })
+          )}</div>`
+        : '';
+
     const body = `
       <h1 class="text-2xl font-bold mb-6">${escapeHtml(t(locale, 'overview.title'))}</h1>
+      ${baselineBanner}
       <section aria-label="${escapeHtml(t(locale, 'overview.tier_breakdown'))}" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5">
           <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold">${escapeHtml(t(locale, 'overview.total_prompts'))}</div>
@@ -445,7 +458,18 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                 (SELECT rule_id FROM rule_hits rh
                   WHERE rh.usage_id = pu.id
                   ORDER BY rh.severity DESC, rh.rule_id ASC
-                  LIMIT 1) AS top_rule_id
+                  LIMIT 1) AS top_rule_id,
+                -- D-046 follow-up: surface ALL rule-hit messages on the
+                -- Prompts list so users see the same verbatim wording as
+                -- on the detail page's "What went wrong" section. json
+                -- array preserves order (severity DESC, rule_id ASC).
+                (SELECT json_group_array(message)
+                   FROM (
+                     SELECT message FROM rule_hits rh2
+                      WHERE rh2.usage_id = pu.id
+                      ORDER BY rh2.severity DESC, rh2.rule_id ASC
+                   )
+                ) AS hit_messages_json
            FROM prompt_usages pu
            LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
            LEFT JOIN sessions s ON s.id = pu.session_id
@@ -462,6 +486,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       source: string;
       hits: number;
       top_rule_id: string | null;
+      hit_messages_json: string | null;
     }>;
 
     const sourceOptions = [
@@ -512,17 +537,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         <tbody>
           ${rows
             .map((r) => {
-              // Inline improvement hint — shown whenever the row has at
-              // least one rule hit, any tier. D-045 supersedes D-043's
-              // weak/bad-only restriction: good-tier rows with no hits
-              // stay single-line naturally (top_rule_id = null), while
-              // ok/weak/bad rows gain one line of "what to improve next
-              // time" so users can scan the whole list without drilling in.
-              const shortTip =
-                locale === 'ko' && r.top_rule_id ? getRuleShortTipKo(r.top_rule_id) : null;
-              const hintLine = shortTip
-                ? `<div class="text-xs text-gray-500 dark:text-zinc-400 italic mt-0.5 truncate">→ ${escapeHtml(shortTip)}</div>`
-                : '';
+              // D-046 follow-up v3: render every rule-hit message verbatim
+              // as its own "→ …" line (severity DESC order). Same wording
+              // as the detail page's "What went wrong" section. No badge,
+              // no truncation — full text wraps within the cell.
+              let hitMessages: string[] = [];
+              if (r.hit_messages_json) {
+                try {
+                  const parsed = JSON.parse(r.hit_messages_json) as unknown;
+                  if (Array.isArray(parsed)) {
+                    hitMessages = parsed.filter(
+                      (m): m is string => typeof m === 'string' && m.length > 0
+                    );
+                  }
+                } catch {
+                  // Malformed aggregate — skip the hint rather than throw.
+                }
+              }
+              const hintLine =
+                hitMessages.length > 0
+                  ? `<div class="mt-1 space-y-0.5">${hitMessages
+                      .map(
+                        (m) =>
+                          `<div class="text-xs text-gray-600 dark:text-zinc-400 italic leading-snug break-words">→ ${escapeHtml(m)}</div>`
+                      )
+                      .join('')}</div>`
+                  : '';
               return `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
                    <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap align-top">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</td>
                    <td class="p-2 font-mono align-top">${r.score >= 0 ? r.score : '-'}</td>
@@ -575,8 +615,20 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           judge_score: number | null;
           final_score: number;
           tier: string;
+          confidence: string | null;
+          baseline_delta: number | null;
+          efficiency_score: number | null;
+          bonus_score: number | null;
+          cap_applied: number | null;
         }
       | undefined;
+
+    // D-046: pull latest baseline average so we can render "vs your avg N".
+    const baselineRow = db
+      .prepare(
+        `SELECT avg_final_score FROM user_baseline_snapshots ORDER BY computed_at DESC LIMIT 1`
+      )
+      .get() as { avg_final_score: number } | undefined;
     const hits = db
       .prepare(`SELECT * FROM rule_hits WHERE usage_id=? ORDER BY severity DESC`)
       .all(id) as Array<{ rule_id: string; severity: number; message: string }>;
@@ -589,16 +641,6 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const currentConfig = loadConfig(deps.rootOverride);
     const consentState = currentConfig.analysis.deep_consent;
     const analyzeEnabled = currentConfig.llm.enabled && consentState === 'granted';
-
-    // ----- Build a one-line diagnosis from the top 2 hits (highest severity) -----
-    // The rule engine already sorted hits DESC by severity. Take the first
-    // two messages and join with " · " — one compact sentence that explains
-    // WHY this score, which is what the user most needs above the fold.
-    const topHits = hits.slice(0, 2);
-    const diagnosisLine =
-      topHits.length === 0
-        ? t(locale, 'detail.no_issues_found')
-        : topHits.map((h) => h.message.trim()).join(' · ');
 
     // ----- Severity → color class for the left accent bar of lesson cards --
     const sevBar = (sev: number): string => {
@@ -654,13 +696,21 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
             <div class="text-sm text-gray-400 font-mono">/100</div>
           </div>
           <div class="flex-1 min-w-[16rem]">
-            <div class="mb-2">${score ? tierBadge(score.tier, locale) : ''}</div>
-            <div class="text-sm text-gray-700 dark:text-zinc-200 leading-relaxed">${escapeHtml(diagnosisLine)}</div>
+            <div class="flex items-center gap-2 flex-wrap">
+              ${score ? tierBadge(score.tier, locale) : ''}
+              ${score ? confidenceBadge(score.confidence, locale) : ''}
+              ${score ? baselineDeltaLine(score.baseline_delta, baselineRow?.avg_final_score ?? null, locale) : ''}
+            </div>
+            ${
+              hits.length === 0
+                ? `<div class="text-sm text-gray-500 dark:text-zinc-400 leading-relaxed mt-2">${escapeHtml(t(locale, 'detail.no_issues_found'))}</div>`
+                : ''
+            }
           </div>
         </div>
         ${
           score
-            ? `<div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 text-xs text-gray-400">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'}</div>`
+            ? `<div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 text-xs text-gray-400">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'} · eff ${score.efficiency_score ?? '–'} · bonus ${score.bonus_score ?? 0}${score.cap_applied != null ? ` · cap ${score.cap_applied}` : ''}</div>`
             : ''
         }
       </section>

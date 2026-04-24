@@ -211,3 +211,43 @@ CREATE INDEX IF NOT EXISTS idx_deep_created ON deep_analyses(created_at DESC);
 export const MIGRATION_005: string = `
 DROP TABLE IF EXISTS rewrites;
 `;
+
+/**
+ * v0.6.0 schema additions — D-046 asymmetric scoring + confidence + baseline.
+ *
+ * - quality_scores.efficiency_score (INT, nullable) — Phase 1 efficiency axis.
+ * - quality_scores.bonus_score       (INT, nullable) — positive signal bonus applied (0..10).
+ * - quality_scores.cap_applied       (INT, nullable) — if cap floor was triggered, the cap value.
+ * - quality_scores.confidence        (TEXT, nullable) — 'high' | 'medium' | 'low'.
+ * - quality_scores.baseline_delta    (INT, nullable) — final_score - user_baseline (Phase 3).
+ * - user_baseline_snapshots          — rolling-window aggregate per user/scope.
+ *
+ * All columns are nullable so old rows keep working; new scorer always writes them.
+ * See docs/00-decision-log.md D-046 and docs/05-quality-engine.md §3..§6.
+ */
+export const MIGRATION_006: string = `
+ALTER TABLE quality_scores ADD COLUMN efficiency_score INTEGER;
+ALTER TABLE quality_scores ADD COLUMN bonus_score      INTEGER;
+ALTER TABLE quality_scores ADD COLUMN cap_applied      INTEGER;
+ALTER TABLE quality_scores ADD COLUMN confidence       TEXT;
+ALTER TABLE quality_scores ADD COLUMN baseline_delta   INTEGER;
+
+CREATE TABLE IF NOT EXISTS user_baseline_snapshots (
+  id                TEXT PRIMARY KEY,
+  scope             TEXT NOT NULL,          -- 'global' for now; room for per-cwd later
+  window_days       INTEGER NOT NULL,
+  computed_at       DATETIME NOT NULL,
+  sample_size       INTEGER NOT NULL,
+  avg_final_score   REAL NOT NULL,
+  avg_word_count    REAL NOT NULL,
+  avg_severity_hits REAL NOT NULL,
+  snapshot_json     TEXT                    -- reserved for future axes
+);
+CREATE INDEX IF NOT EXISTS idx_baseline_scope ON user_baseline_snapshots(scope, computed_at DESC);
+
+-- prompt_usages gets per-turn efficiency features extracted by the worker.
+-- Kept as a sibling to quality_scores so re-scoring doesn't lose input features.
+ALTER TABLE prompt_usages ADD COLUMN first_shot_success INTEGER;  -- 0|1|null
+ALTER TABLE prompt_usages ADD COLUMN tool_call_count    INTEGER;
+ALTER TABLE prompt_usages ADD COLUMN follow_up_depth    INTEGER;
+`;
