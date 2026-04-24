@@ -22,7 +22,7 @@ import {
   tierBadge,
 } from './html.js';
 import { type Locale, resolveLocale, t } from './i18n.js';
-import { getRuleExampleKo } from './rule-examples.js';
+import { getRuleExampleKo, getRuleShortTipKo } from './rule-examples.js';
 
 export interface DashboardDeps {
   config?: Config;
@@ -386,7 +386,14 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         `SELECT pu.id, substr(pu.prompt_text,1,160) AS snippet, pu.created_at, pu.char_len,
                 COALESCE(qs.final_score, -1) AS score, COALESCE(qs.tier, 'n/a') AS tier,
                 COALESCE(s.source, 'claude-code') AS source,
-                (SELECT COUNT(*) FROM rule_hits rh WHERE rh.usage_id=pu.id) AS hits
+                (SELECT COUNT(*) FROM rule_hits rh WHERE rh.usage_id=pu.id) AS hits,
+                -- Top hit = highest severity, ties broken by rule_id ASC so the
+                -- inline hint is stable across re-renders. Used only for
+                -- weak/bad tier rows (D-043).
+                (SELECT rule_id FROM rule_hits rh
+                  WHERE rh.usage_id = pu.id
+                  ORDER BY rh.severity DESC, rh.rule_id ASC
+                  LIMIT 1) AS top_rule_id
            FROM prompt_usages pu
            LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
            LEFT JOIN sessions s ON s.id = pu.session_id
@@ -402,6 +409,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       tier: string;
       source: string;
       hits: number;
+      top_rule_id: string | null;
     }>;
 
     const sourceOptions = [
@@ -451,16 +459,25 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         </thead>
         <tbody>
           ${rows
-            .map(
-              (r) =>
-                `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
-                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap">${escapeHtml(r.created_at)}</td>
-                   <td class="p-2 font-mono">${r.score >= 0 ? r.score : '-'}</td>
-                   <td class="p-2">${tierBadge(r.tier, locale)}</td>
-                   <td class="p-2 text-xs text-gray-600 dark:text-zinc-300">${escapeHtml(r.source)}</td>
-                   <td class="p-2 truncate max-w-[32rem]">${escapeHtml(r.snippet)}</td>
-                 </tr>`
-            )
+            .map((r) => {
+              // Inline improvement hint — only for weak/bad tiers, KO locale.
+              // Other tiers stay single-line to keep the table dense.
+              const showHint = (r.tier === 'weak' || r.tier === 'bad') && locale === 'ko';
+              const shortTip = showHint && r.top_rule_id ? getRuleShortTipKo(r.top_rule_id) : null;
+              const hintLine = shortTip
+                ? `<div class="text-xs text-gray-500 dark:text-zinc-400 italic mt-0.5 truncate">→ ${escapeHtml(shortTip)}</div>`
+                : '';
+              return `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
+                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap align-top">${escapeHtml(r.created_at)}</td>
+                   <td class="p-2 font-mono align-top">${r.score >= 0 ? r.score : '-'}</td>
+                   <td class="p-2 align-top">${tierBadge(r.tier, locale)}</td>
+                   <td class="p-2 text-xs text-gray-600 dark:text-zinc-300 align-top">${escapeHtml(r.source)}</td>
+                   <td class="p-2 max-w-[32rem] align-top">
+                     <div class="truncate">${escapeHtml(r.snippet)}</div>
+                     ${hintLine}
+                   </td>
+                 </tr>`;
+            })
             .join('')}
         </tbody>
       </table>`;

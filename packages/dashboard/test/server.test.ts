@@ -855,3 +855,77 @@ describe('dashboard favicon', () => {
     await app.close();
   });
 });
+
+// Inline improvement hint on Prompts list rows (D-043).
+describe('Prompts list · inline hint (weak/bad KO)', () => {
+  async function seedPromptWithHit(
+    tier: 'good' | 'ok' | 'weak' | 'bad',
+    ruleId: string
+  ): Promise<{ id: string }> {
+    const db = openDb();
+    upsertSession(db, { id: `s-${tier}`, cwd: '/tmp' });
+    const u = insertPromptUsage(db, {
+      session_id: `s-${tier}`,
+      prompt_text: `prompt tiered ${tier}`,
+    });
+    upsertQualityScore(db, {
+      usage_id: u.id,
+      rule_score: tier === 'good' ? 90 : tier === 'ok' ? 70 : tier === 'weak' ? 50 : 30,
+      final_score: tier === 'good' ? 90 : tier === 'ok' ? 70 : tier === 'weak' ? 50 : 30,
+      tier,
+      rules_version: 1,
+    });
+    insertRuleHit(db, {
+      usage_id: u.id,
+      rule_id: ruleId,
+      severity: 3,
+      message: 'test',
+    });
+    db.close();
+    return { id: u.id };
+  }
+
+  it('renders "→ shortTip" under weak-tier prompt rows (KO)', async () => {
+    await seedPromptWithHit('weak', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.statusCode).toBe(200);
+    // R004 shortTip = "한 번에 한 가지만 부탁하세요."
+    expect(res.body).toContain('한 번에 한 가지만 부탁하세요');
+    expect(res.body).toMatch(/→ 한 번에 한 가지만/);
+    await app.close();
+  });
+
+  it('renders "→ shortTip" under bad-tier prompt rows (KO)', async () => {
+    await seedPromptWithHit('bad', 'R010');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    // R010 shortTip = "길이 · 언어 · 범위 제약을 한 줄 추가하세요."
+    expect(res.body).toContain('길이 · 언어 · 범위 제약을 한 줄 추가하세요');
+    await app.close();
+  });
+
+  it('does NOT render hint for good-tier rows (signal preservation)', async () => {
+    await seedPromptWithHit('good', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.body).not.toContain('→ 한 번에 한 가지만');
+    await app.close();
+  });
+
+  it('does NOT render hint for ok-tier rows', async () => {
+    await seedPromptWithHit('ok', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=ko' });
+    expect(res.body).not.toContain('→ 한 번에 한 가지만');
+    await app.close();
+  });
+
+  it('skips hint for non-KO locales (examples are KO-only for now)', async () => {
+    await seedPromptWithHit('weak', 'R004');
+    const app = buildDashboardServer({ rootOverride: tmp });
+    const res = await app.inject({ method: 'GET', url: '/prompts?lang=en' });
+    expect(res.body).not.toContain('한 번에 한 가지만');
+    await app.close();
+  });
+});
