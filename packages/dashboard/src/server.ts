@@ -512,10 +512,14 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         <tbody>
           ${rows
             .map((r) => {
-              // Inline improvement hint — only for weak/bad tiers, KO locale.
-              // Other tiers stay single-line to keep the table dense.
-              const showHint = (r.tier === 'weak' || r.tier === 'bad') && locale === 'ko';
-              const shortTip = showHint && r.top_rule_id ? getRuleShortTipKo(r.top_rule_id) : null;
+              // Inline improvement hint — shown whenever the row has at
+              // least one rule hit, any tier. D-045 supersedes D-043's
+              // weak/bad-only restriction: good-tier rows with no hits
+              // stay single-line naturally (top_rule_id = null), while
+              // ok/weak/bad rows gain one line of "what to improve next
+              // time" so users can scan the whole list without drilling in.
+              const shortTip =
+                locale === 'ko' && r.top_rule_id ? getRuleShortTipKo(r.top_rule_id) : null;
               const hintLine = shortTip
                 ? `<div class="text-xs text-gray-500 dark:text-zinc-400 italic mt-0.5 truncate">→ ${escapeHtml(shortTip)}</div>`
                 : '';
