@@ -315,7 +315,220 @@
 
 ---
 
-## D-038 · 임베드 모드: `install --no-dashboard` + agent JSON API
+## D-038 · 대시보드 브랜드 재정렬 — emerald + ink scale (D-037 supersede)
+
+- **Date:** 2026-04-23
+- **Problem:** D-037 은 "사이트 로컬 `site/` 디렉터리" 를 참조해 `accent: #6366f1` (indigo) 로 대시보드를 정렬했지만, **유저가 실제 운영하는 마케팅 사이트는 별도 repo `github.com/must-goldenrod/think-prompt-site`** 였다. 그 사이트의 캐노니컬 팔레트는 emerald (`#10b981`) + ink 950/900/800/700/600 dark scale + Inter + Noto Sans + JetBrains Mono. 결과: 유저 관점에서 대시보드와 사이트 컬러가 완전히 달라 "같은 프로덕트" 신호가 깨짐.
+- **Decision:** 대시보드 토큰을 **emerald + ink scale** 로 재정렬하고 D-037 을 supersede. 변경:
+  - `accent`: `#6366f1` → `#10b981` (emerald-500)
+  - `ink`: scalar → scale (`950: #050812, 900: #0b0f19, 800: #0f172a, 700: #111827, 600: #1f2937`)
+  - `fontFamily.sans`: Inter + Noto Sans KR/JP/SC + system-ui + sans-serif
+  - `fontFamily.mono`: JetBrains Mono + ui-monospace + SFMono-Regular + Menlo
+  - `:focus-visible` 링, `::selection`, favicon 전부 emerald 로 교체
+  - Google Fonts preconnect + CSS 링크 주입 (4 family × 5 weight)
+- **Scope:** 대시보드 UI 전체. favicon 두 위치(대시보드 인라인 SVG · `site/favicon.svg`) 동시 교체. 번들러 도입 없음 (D-012 유지).
+- **D-037 과의 관계:** D-037 은 "잘못된 소스" 에 기반한 결정이었으므로 **취소**. 회복 비용은 낮음 — 토큰 이름 그대로 유지하면서 값만 교체, 호출 코드 변경 없음.
+- **왜 dark body 기본 전환은 안 하는가:** 사이트는 dark-only 지만 대시보드는 데이터 UI 로서 밝은 배경의 가독성이 낫다. 라이트 기본 + 다크 모드(선택) 구조 유지. ink scale 은 향후 부분적 dark 컴포넌트(터미널 카드·코드 블록 등)에 사용 가능하도록 열어 둠.
+
+### D-037 상태: 취소 (superseded by D-038)
+
+---
+
+## D-039 · Prompts 테이블 UX 정리 — Created 좌측·Hits 제거·Search 버튼·강조 Tier 배지
+
+- **Date:** 2026-04-23
+- **Problem:** 유저가 Prompts 페이지에서 (a) Hits 칼럼이 정보 가치 대비 공간 낭비, (b) Created 가 우측 끝이라 시선 흐름이 역방향, (c) 검색 입력란 placeholder 에 `rule id e.g. R003` 이 떠서 "여기서 R 을 쳐야 하나" 혼란, (d) 제출 버튼 라벨 "Filter/필터" 가 실행 버튼임을 가리지 못함, (e) tier 배지(good/ok/weak/bad)가 조용한 pill 이라 한눈에 안 들어옴 — 을 지적.
+- **Decision:**
+  - **칼럼 재배열**: `Created (맨 왼쪽) · Score · Tier · Source · Prompt`. Hits 칼럼 제거 (rule_hits 수는 디테일 페이지에서 인라인 표시).
+  - **Search placeholder + 버튼 라벨**: 5개 언어 모두 "Search/검색/搜索/Buscar/検索" 로 통일. `prompts.filter` i18n 키는 유지하되 값만 "Search" 류로 변경 (향후 복원 비용 0).
+  - **Tier 배지 강화**: `bg-*-50 text-*-700 ring-1 ring-*-600/40` + `uppercase tracking-wider font-mono font-semibold text-[11px]`. 다크모드 매핑 포함. 뱃지 내부 텍스트는 ASCII (`GOOD/OK/WEAK/BAD/N/A`) 로 언어 무관하게 동일. aria-label 은 로케일 번역값으로 스크린리더 접근성 유지.
+- **Rationale:**
+  - Created 좌측 배치 = 최신순 정렬 기본값과 시선 흐름 정합 (좌→우 스캔).
+  - Hits 칼럼 제거는 D-036 과 같은 정신: "유저가 자기 프롬프트를 돌아보는" 핵심 동선에서 메타 정보 노이즈 제거.
+  - "Search" 는 유저의 의도("필터를 실행한다") 와 UI 표면("버튼") 의 매칭이 더 직관적. `prompts.filter` 키 유지는 i18n 복원 비용 최소화.
+  - Tier 배지 uppercase + ring + mono 는 데이터 행에서 tier 가 가장 중요한 신호임을 시각적으로 확고히 함.
+- **Scope:** `packages/dashboard/src/server.ts` 테이블 · `packages/dashboard/src/html.ts` `tierBadge()` · `packages/dashboard/src/i18n.ts` 5개 언어. 테스트 5건 추가.
+- **관계:** D-032 미션 정렬 — "유저의 자기 프롬프트 자각" 서피스를 더 선명하게.
+
+---
+
+## D-040 · 프롬프트 디테일 페이지 = "코칭 세션"으로 재프레이밍
+
+- **Date:** 2026-04-23
+- **Problem:** 기존 `/prompts/:id` 가 DB 쿼리 결과를 8개 섹션으로 나열하는 뷰에 가까웠다. 유저 체감: "점수는 보이는데 왜 이런 점수인지, 뭘 고쳐야 하는지가 한눈에 안 들어온다." D-032 미션("인지 고착·프롬프트 자각 해소") 서피스에서 가장 직접적인 코칭 표면이 약하게 작동 중이었음.
+- **Decision:** 디테일 페이지를 **코칭 세션** 구조로 재배치. 유저의 학습 여정(Score → Why → How) 을 따라가도록 섹션을 재배열하고, 룰 히트를 "라벨 + 메시지" 에서 "bad→good 예시를 포함한 lesson 카드" 로 격상.
+  - **Hero 섹션**: `text-5xl font-mono` 큰 점수 + tier 배지 + **한 줄 진단**(top 2 룰 히트 메시지 ` · ` 조인) + rewrite CLI 명령 + 서브 스코어(rule/usage/judge) 한 줄. above-the-fold 에서 진단 완결.
+  - **Original vs Rewritten 2-col**: 최신 rewrite 를 원문 옆에 비교 배치. rewrite 없으면 동일 스타일의 빈 상태 카드(기존의 "CLI 쳐" 빈 여백을 대체).
+  - **Rule hits = lesson 카드**: 각 카드에 severity 좌측 컬러 바(3 red / 2 orange / 1 yellow) + `R004` + `SEV 3` 배지 + 메시지 + **KO 로케일 한정** 약한 예 / 강한 예 / Tip. 예시 데이터는 `packages/dashboard/src/rule-examples.ts` 에 18개 룰 한국어 카피로 내장.
+  - **이전 rewrites**: 있으면 별도 섹션으로 분리.
+  - **Deep analysis**: 기존 그대로 섹션 유지(LLM OFF 안내가 주) 하되 순서만 하단으로 이동.
+  - **Feedback 👍👎**: 유저가 진단을 읽은 뒤 찍도록 페이지 **하단** 으로 이동.
+  - **Meta strip**: `<details>` 로 기본 접힘. 유저가 id/session/chars 를 보고 싶을 때만 펼침.
+- **Rationale:**
+  - "점수 → 왜 이 점수 → 어떻게 고칠지" 흐름이 스크롤 축이 되어야 함.
+  - "라벨만 뿌리는" rule hit 에 유저가 개선 행동으로 옮길 hook 이 없었음 → bad→good 예시 한 쌍이 구체 행동을 제공.
+  - Rewrites / Deep analysis 의 "빈 상태" 가 세 곳에서 같은 "CLI 쳐서 활성화" 패턴으로 반복 → rewrite 는 첫 카드로 중요 행동에 올림, deep analysis 는 하단에 유지해 덜 중요한 보조 기능으로 자리매김.
+  - Feedback 을 위로 두면 "평가" 가 "학습" 보다 앞서는 이상한 동선 → 내린다.
+- **Scope:**
+  - **신규 파일**: `packages/dashboard/src/rule-examples.ts` (R001~R018 한국어 예시 18건 + getter).
+  - **i18n**: 5개 언어 × 4 신규 키 (`detail.no_issues_found`, `detail.rewrite_cta`, `detail.rewritten`, `detail.previous_rewrites`) + 4 기존 키 값 개정 (`detail.rule_hits` · `no_hits` · `suggested_rewrites` · `rewrite_none`).
+  - **server.ts** 디테일 핸들러 body 전면 재구성.
+  - **테스트** 4건 추가: 히어로 빅 스코어·rewrite CLI, severity 컬러 바 + KO 예시, Original/Rewritten 2-col + 빈 상태 카피, meta `<details>` 접힘.
+- **Known limits:**
+  - rule-examples 는 **한국어만**. 다른 4개 로케일에서는 예시 블록이 생략되고 메시지만 표시. 영어 번역은 후속 PR.
+  - 한 줄 진단이 top 2 히트 메시지 ` · ` 조인이라 3개 이상 히트일 때 "+ N 더" 같은 힌트가 아직 없음. rule_hits 가 10개 넘는 프롬프트에선 보완 필요.
+  - 룰 ID 가 rule-examples 에 없는 경우(예: 신규 룰 R019 가 나왔는데 예시 누락) 자동 fallback 으로 예시 블록 스킵 — 에러 아님.
+- **관계:** D-032(미션), D-036(rules 나비 숨김 — 여전히 라우트 살아있어 이번 lesson 카드가 후일 `/rules#R004` 같은 딥링크 허브로 연결 가능), D-038(emerald/ink 팔레트와 lesson 카드 스타일 정합).
+
+---
+
+## D-041 · `think-prompt rewrite` 자동 리라이트 기능 제거 (D-026 supersede)
+
+- **Date:** 2026-04-23
+- **Problem:** 유저가 대시보드 디테일 페이지에서 `think-prompt rewrite <id>` CTA 를 보고 "이 기능은 내가 원한 게 아니다" 라고 명시. 제품 원래 방향과 맞지 않는 자동 리라이트 제안이 코치 세션의 primary CTA 자리를 차지하고 있었음.
+- **Decision:** `think-prompt rewrite` 기능 전체 제거.
+  - **CLI**: `packages/cli/src/commands/rewrite.ts` 파일 삭제 · `index.ts` 의 `rewrite <id>` 커맨드 등록 제거.
+  - **Worker**: `handleRewrite` 핸들러 + `REWRITE_SYSTEM` 시스템 프롬프트 삭제 · `HANDLERS` 맵에서 `rewrite` 제거.
+  - **Queue**: `QueueJobKind` 에서 `'rewrite'` 제거.
+  - **DB**: `MIGRATION_005` 추가 — 기존 설치에서 `rewrites` 테이블 `DROP TABLE IF EXISTS` (히스토리 데이터 일괄 폐기). `CURRENT_SCHEMA_VERSION` 4 → 5.
+  - **Dashboard**: 디테일 페이지에서 "Improved" 칼럼 · 히어로 rewrite CLI CTA · "Previous rewrites" 섹션 제거. Original 은 이제 전폭 단일 카드.
+  - **Doctor**: `rewrites` 카운트 제거 · LLM disabled 힌트 "judge & rewrite" → "judge & deep-analysis".
+  - **i18n**: 5 개 키 × 5 언어 총 25 개 번역 라인 제거.
+  - **CLI show**: `rewrite` 섹션 출력 제거.
+- **Rationale:**
+  - 유저의 명시적 제품 방향 — "코칭 = 유저 자각 유도" 이지 "자동 재작성 제공" 이 아님 (D-032 미션과 정합).
+  - 자동 리라이트는 유저가 "받아쓰게" 만들어 **프롬프트 자각** 을 오히려 약화시키는 방향. 디테일 페이지의 rule-hit lesson 카드(D-040) 가 이미 "어떻게 고칠지" 를 제공하므로 중복.
+  - D-026("메타 프롬프트 단일 버전 · accept/reject 버튼") 의 전제가 더 이상 유효하지 않음 → **D-026 도 함께 취소**.
+  - 코드 축소 (~180 줄 감소) + DB 스키마 간결화 + LLM 사용처 단일화(deep analysis 만 남음).
+- **Scope:**
+  - 제거됨: CLI 커맨드 1 개 · worker handler 1 개 · DB 테이블 1 개 · 대시보드 UI 섹션 3 곳 · i18n 키 5 개 × 5 언어.
+  - **유지**: `think-prompt analyze` (D-033 deep analysis) 는 별건 기능 — consent 게이팅, 다른 DB 테이블(`deep_analyses`), 다른 UI 섹션 유지. 유저가 "deep analysis 도 제거" 라 하지 않았고, D-033 의 설계 의도(명시적 동의 하에 categorized problems + reasoning 구조화) 는 다른 축.
+- **관계:** D-026(자동 리라이트 전략) **취소**. D-032(미션 정렬) 강화. D-033(deep analysis) 무영향.
+- **Known impact:**
+  - v0.4.0 은 breaking — `think-prompt rewrite` 를 쓰던 유저 스크립트 깨짐. 0.x 시리즈이므로 허용 (CHANGELOG 도입부 명시).
+  - `rewrites` 테이블에 기록된 과거 자동 생성물은 MIGRATION_005 에서 영구 삭제. 유저가 의미 있게 참조하던 데이터 아니므로 데이터 손실 리스크 낮음.
+
+### D-026 상태: 취소 (superseded by D-041)
+
+---
+
+## D-043 · Prompts 리스트 weak/bad 행에 인라인 개선 힌트
+
+- **Date:** 2026-04-24
+- **Problem:** Prompts 리스트가 점수(85/72/…) 만 보여주고 "뭘 더 잘해서 점수를 올릴지" 는 상세 페이지를 열어야만 보임. 유저 피드백: 목록 수준에서 즉각 학습 가능해야 함.
+- **Decision:** weak · bad tier 행에 한해 `→ {shortTip}` 한 줄을 prompt snippet 아래 추가.
+  - SQL 에 `top_rule_id` 서브쿼리 추가 — 각 프롬프트의 highest-severity 룰을 한 번의 쿼리로 함께 가져옴 (N+1 회피). tie-break `rule_id ASC` 로 재렌더 안정성 확보.
+  - 렌더: tier 가 weak/bad 이고 locale 이 `ko` 일 때만 힌트 표시. `<div class="text-xs text-gray-500 italic mt-0.5 truncate">` 로 톤 절제.
+  - good · ok 행은 1줄 유지 — 합격 수준에서 nag 방지 + 테이블 밀도 보존.
+  - 비-KO 로케일은 예시 카피가 KO 만이라 생략. 영어 shortTip 은 후속.
+- **Rationale:**
+  - D-032 미션("프롬프트 자각") 직결 — "어떻게 고칠지" 가 클릭 없이 보이는 순간 유저의 행동 전환이 시작됨.
+  - D-021("조용히 기록") 과의 긴장 관리: good/ok 행에 힌트를 안 붙여 지적 빈도 통제. weak/bad 는 이미 "문제 신호" 이므로 추가 개입 정당화.
+- **Scope:** `packages/dashboard/src/server.ts` Prompts 쿼리 + 렌더 · `packages/dashboard/src/rule-examples.ts` `shortTip` 필드(18 룰) + `getRuleShortTipKo()` helper. 테스트 5건 추가.
+- **Known limits:**
+  - shortTip 은 한국어만. 다른 4 개 로케일은 예시 블록 자체가 없어 힌트 생략.
+  - top_rule_id 선택은 severity 최대값 1 건. 동률 시 rule_id ASC. 유저가 여러 심각한 이슈를 겹쳐 가진 경우 하나만 표시됨 — 디테일 페이지에서 전체 보기 가능.
+- **관계:** D-032(미션), D-040(lesson 카드의 축소 버전 — 목록 레벨로 이식).
+
+---
+
+## D-044 · Overview "자주 걸리는 패턴" Top-5 섹션
+
+- **Date:** 2026-04-24
+- **Problem:** 유저가 점수는 보이는데 "나는 어떤 실수를 자주 하는가" 를 스스로 정리할 수 없음. 한 개 프롬프트 단위 피드백(D-043) 이 있지만 패턴 차원의 자각은 별도 서피스가 필요.
+- **Decision:** Overview 에 "자주 걸리는 패턴 · 지난 30일" 섹션 추가. KPI row 아래, Daily chart 위.
+  - **쿼리**: `SELECT rule_id, COUNT(*) FROM rule_hits JOIN prompt_usages WHERE created_at >= datetime('now','-30 days') GROUP BY rule_id ORDER BY COUNT(*) DESC LIMIT 5`
+  - **렌더**: 룰별 1행 카드. severity 좌측 컬러 바 + `R{id}` + shortTip(KO) / description(기타) + 누적 건수. click 불가(aggregation이라 이동 대상 모호).
+  - **Empty state**: 30 일 간 히트 0 건이면 "최근 30일 반복 패턴 없음 — 잘하고 계세요." 안내.
+  - **배치 전략**: Overview **만**. Prompts 페이지 배너로 중복 노출하지 않음 — 두 서피스에서 같은 nag 를 두 번 하면 피로 증폭.
+- **Rationale:**
+  - "개별 프롬프트 개선 (D-043) → 패턴 자각 (D-044)" 의 두 단계 학습 루프.
+  - 30 일 창은 경험상 "습관" 이 노출되는 최소 길이. 7 일은 소음, 90 일은 오래전 이슈까지 끌어와 혼란.
+  - Top-5 = 집중 가능한 최소 단위. Top-10 은 정보 피로.
+- **Scope:** `packages/dashboard/src/server.ts` Overview 쿼리 + 섹션 렌더 · i18n 3 키 × 5 언어(`overview.patterns_to_watch`, `patterns_window`, `patterns_empty`). 테스트 3건 추가 (정렬·로케일·empty state).
+- **Known limits:**
+  - 유저가 dismiss 할 경로 없음. 첫 인상이 너무 nag 처럼 느껴지면 섹션 전체 hide 옵션 필요 — 후속.
+  - rule description 은 registry 가 현재 한국어인 케이스가 많아 비-KO 로케일 fallback 품질이 들쭉날쭉할 수 있음. 완전 i18n 은 별 과제.
+- **관계:** D-032(미션 — 인지 고착 해소의 aggregation 수준 개입), D-043(개별 프롬프트 힌트의 집계판), D-021(조용히 기록: Overview 한 곳만 노출해 톤 통제).
+
+---
+
+## D-046 · 품질 스코어 = {점수·이유·확신도·개인 delta} 4-tuple 계약 (D-006 supersede)
+
+- **Date:** 2026-04-24
+- **Problem:** D-006 은 "룰 70% + 실사용 30% + (의심 시) LLM judge" 선형 가중합을 고정했다. 실제 유저 체감은 세 방향에서 어긋나 있다.
+  1. **대칭 선형의 한계.** 현재 `rule_score = 100 - Σ(severity_weight)` 는 감점 전용·대칭. 유저가 "좋은 프롬프트는 후하게, 문제 있는 프롬프트는 팍팍" 을 원해도 공식상 불가능.
+  2. **시간/효율 축 부재.** 꼼꼼한 긴 프롬프트가 늘 더 좋은 것은 아니다. 짧아도 한 방에 의도가 해결되면 의미 있는 프롬프트인데, 현재 `usage_score` 에는 그 신호가 반영되지 않는다(실패율·재사용·길이·피드백만).
+  3. **환경 변수(뉘앙스·맥락·기분·대화 이력) 처리 부재.** 동일 문장이 서로 다른 맥락에서 서로 다른 가치를 가지는데 시스템이 이를 인정하지 않고 절대 점수만 단언 → 유저가 점수에 동의하지 못하면 신뢰가 무너진다.
+- **Decision (채택 Paradigm D — Hybrid + Confidence Signaling):** 품질 평가는 단일 숫자가 아니라 **4-tuple 계약**으로 제공된다. UI·API·저장 계층 전부 이 계약을 따른다.
+
+  ```
+  { score:number, top_issue:string, confidence:'high'|'medium'|'low', delta?:number }
+  ```
+
+  공식 변경은 네 개 축으로 정의된다:
+
+  1. **비대칭 cap floor (severity ceiling).** severity 4+ 히트가 하나라도 걸리면 최종 점수에 상한선 강제.
+     - severity ≥ 5 hit → `final_score ≤ 40` (bad 고정)
+     - severity ≥ 4 hit → `final_score ≤ 60` (weak 이하)
+     - severity 3 hit ≥ 2 개 → `final_score ≤ 75`
+     → 다른 항목이 100 이어도 가리지 못함. "팍팍 떨어뜨리기" 를 구조적으로 보장.
+
+  2. **Positive signal bonus.** 감점 전용에서 탈피. 출력 포맷·성공 기준·예시·파일 경로 등 "있으면 좋은 것" 이 있을 때 **최대 +10 까지 bonus**. 감점 없고 양성 신호 있으면 100 쉽게 도달.
+
+  3. **Efficiency 축 (usage_score 의 새 지표).** Tier 2 worker 가 transcript JSONL 을 이미 파싱하므로 다음 신호를 추출해 가중 평균에 투입:
+     - **first-shot success**: 후속 프롬프트가 correction 패턴("다시/아니/취소/수정") 이 아니면 100, 있으면 감점
+     - **tool call 경제성**: 의도 대비 tool_use 수 (적을수록 좋음)
+     - **turn duration**: Stop 훅까지 경과 시간
+     `usage_score` 가중치 재편: `efficiency 0.20 + fail 0.25 + reuse 0.20 + length 0.10 + feedback 0.25` (efficiency 신규, length/fail/reuse 비중 축소).
+
+  4. **Confidence signaling.** 모든 점수에 high/medium/low 확신도 부여. 계산 근거:
+     - **high**: severity 3+ 히트 명확 AND (usage_score 존재 OR judge_score 존재), baseline 과 일치
+     - **medium**: 기본값
+     - **low**: 룰 히트는 있으나 severity 2 이하만, 또는 맥락 피처가 특이(첫 턴·매우 긴 세션 말미·correction 직후), 또는 baseline 대비 delta ±25 초과
+     → UI 는 low confidence 점수 뒤에 "참고용" 레이블을 노출해 유저가 점수에 대들 근거 제공. 시스템이 자기 한계를 인정하는 **신뢰 계약**.
+
+  5. **개인 baseline delta (Phase 3, 점진 활성화).** 유저 누적 턴 ≥ 50 이 되면 `user_baseline_snapshot` 에 rolling window 30일 기준 {avg_rule_score, avg_word_count, avg_severity_count} 저장. 점수 표시는 이중:
+     - 절대: `72 / ok (확신 높음)`
+     - delta: `당신 평균 78 대비 -6`
+     50턴 미만에서는 `calibrating...` 라벨로 정직하게 표시.
+
+- **Rationale:**
+  - **환경 변수를 "전부 반영" 도 "전부 무시" 도 실패다.** 전부 반영(LLM judge 의존) → 비용·프라이버시·불투명. 전부 무시(현재) → 기계적·불공정. 중간 길은 **"반영할 것은 피처로 쓰고 시스템이 자기 확신도를 노출"**.
+  - **moat 분석.** 룰셋(A)·LLM judge(B)·개인 캘리브레이션(C) 각각은 경쟁자가 복제 가능. 그러나 **로컬 longitudinal 데이터 + confidence signaling + 개인 baseline** 의 결합은 D-004(로컬 중심) 덕분에 복제 난이도 상승. 성공 확률 추정 A 40% / B 30% / C 50% / D 70%.
+  - **콜드스타트 2 주는 피할 수 없다.** 초기 50턴 이전엔 Phase 3/4 효과 없음 → `calibrating...` UX 로 정직하게 표시. 유저가 "아직 데이터 모으는 중" 을 이해하면 신뢰 손실 없음.
+  - **D-032(미션) 와의 정합.** "점수가 진짜 낮아야 유저가 자각한다" 는 cap floor 로, "잘 쓴 프롬프트에 자신감" 은 positive bonus 로, "프롬프트 자각" 은 confidence + delta 의 투명성으로 강화됨.
+
+- **Alternatives considered:**
+  - ① 현재 공식 미세 튜닝(severity 가중치만 재조정) — 대칭 선형의 한계를 해결 못 함. 반려.
+  - ② LLM judge 를 기본값으로 (primary scorer) — 비용·프라이버시·불투명. 반려.
+  - ③ 개인 캘리브레이션 단독 — 콜드스타트 기간 사용 불가. D 의 일부로 흡수.
+
+- **Scope / 영향:**
+  - **공식 재작성:** `docs/05-quality-engine.md` §3~§7 전면 재작성 (응당 이 D-046 과 함께 본 PR 에 포함).
+  - **schema:** `MIGRATION_006` — `prompt_usages` 에 `efficiency_score INT`, `confidence TEXT`, `baseline_delta INT` 추가. `user_baseline_snapshots(scope,window_days,computed_at,avg_final_score,avg_word_count,sample_size,snapshot_json)` 테이블 신규.
+  - **scorer.ts:** `applyCap()`, `computeEfficiencyScore()`, `computeConfidence()`, `composeFinalScore()` 확장. Tier 밴드 **90/70/50 상향** (현재 85/65/45 → 새 밴드).
+  - **신규 모듈:** `packages/core/src/baseline.ts` (rolling avg), `packages/core/src/confidence.ts`.
+  - **rules:** R001·R010·R011 severity **2 → 1** (구조/스타일 완화). R004·R012 severity **3 → 4** (다중 태스크·코드 덤프 강화). R005 유지(5).
+  - **worker:** `handleParseTranscript` 가 efficiency 피처 추출 후 `computeEfficiencyScore` 호출 → `prompt_usages.efficiency_score` 갱신 → `composeFinalScore` 재실행.
+  - **dashboard:** 디테일 페이지 hero 에 `confidence` 배지 + baseline delta 한 줄. Prompts 리스트 `tier` 셀 옆 confidence 보조 글자. 데이터 < 50 이면 상단 `calibrating…` 안내.
+  - **config:** `scorer.baseline_min_samples: 50`, `scorer.baseline_window_days: 30`, `scorer.confidence.low_delta_threshold: 25` 추가.
+
+- **Known limits / 후속:**
+  - first-shot success 추정은 휴리스틱. 유저 만족 vs 포기 구분 오탐 가능 → 초기 가중치 보수적(0.20). 1 개월 데이터로 튜닝.
+  - baseline delta 는 첫 50턴 이전 비활성. 쿠킹 기간 동안 confidence 기본 `medium`.
+  - LLM judge 트리거 조건 변경: `rule_score < 60` → `confidence == 'low'`. 비용 자연스럽게 관리됨.
+
+- **관계:**
+  - **D-006(룰 70% + 실사용 30%):** **supersede** — 아래 취소 섹션에 이전.
+  - **D-032(미션):** "인지 고착 해소 + 프롬프트 자각" 을 cap floor + confidence + delta 로 구체화.
+  - **D-004(로컬 중심):** baseline · confidence · delta 모두 로컬에서 계산. LLM judge 호출 빈도 오히려 감소.
+
+### D-006 상태: 취소 (superseded by D-046)
+
+---
+
+## D-047 · 임베드 모드: `install --no-dashboard` + agent JSON API
 
 - **Date:** 2026-05-12
 - **Problem:** `claude-alive` (실시간 에이전트 시각화 도구)와 같은 사용자를 공유하는데, 두 도구의 대시보드가 별개 포트(47824 / 3141)로 떠 있어 "한 제품"이라는 느낌이 없었다. 사용자가 claude-alive UI 안에서 think-prompt 데이터(프롬프트 목록·스코어·룰 hit)도 같이 보고 싶어 함.
@@ -332,9 +545,21 @@
   - ③ dashboard 자체를 claude-alive로 흡수(C 옵션) — Tier 분리·fail-open 격리가 흐려질 위험. 현재 단계에서는 과한 변경.
   - ④ 별도 임베드 전용 패키지 신설 — agent와 같은 DB에 접근해야 해서 중복 책임. 반려.
 - **Scope:** `packages/cli/src/commands/install.ts`·`uninstall.ts`·`index.ts` 옵션 추가, `packages/agent/src/server.ts` 4개 GET 라우트. dashboard 패키지·browser-extension·rules·core는 스코프 외.
-- **관계:** D-028(fail-open) — agent/worker 격리 보존 · D-004(로컬 우선) — 마스킹본만 노출 · D-012(번들러 없음) — dashboard는 그대로 · D-034(npm 단일 번들) — `think-prompt` 바이너리는 동일, 새 플래그만 추가.
+- **관계:** D-028(fail-open) — agent/worker 격리 보존 · D-004(로컬 우선) — 마스킹본만 노출 · D-012(번들러 없음) — dashboard는 그대로 · D-034(npm 단일 번들) — `think-prompt` 바이너리는 동일, 새 플래그만 추가 · D-046(4-tuple 계약) — JSON API 응답에 confidence/delta 필드를 포함시키는 건 후속 PR (이번엔 기존 final_score/tier만 노출).
 
 ---
 
 ## 취소된 결정
+
+### D-006 · 품질 스코어 구성 (룰 70% + 실사용 30%, LLM 심판 `rule_score < 60`)
+- **취소 이유:** 선형 대칭 가중합은 "좋은 건 더 좋게, 나쁜 건 팍팍" 을 구조적으로 표현할 수 없고, usage_score 에 시간/효율 축이 비어 있어 "짧아도 한 방에 풀린 프롬프트" 를 인정할 수 없다. 환경 변수(뉘앙스·맥락·기분) 에 대한 시스템의 자기 확신도 노출 장치도 없음. D-046 으로 대체.
+- **취소일:** 2026-04-24
+
+### D-026 · 자동 리라이트 전략 (단일 버전 메타 프롬프트 · accept/reject)
+- **취소 이유:** 유저의 명시적 피드백 — 자동 리라이트가 원래 제품 방향이 아니며, 유저 자각을 약화시키는 방향. `think-prompt rewrite` CLI, `rewrites` 테이블, 대시보드 UI 전부 제거. D-041 로 대체.
+- **취소일:** 2026-04-23
+
+### D-037 · 대시보드 브랜드 토큰 통일 (로컬 `site/` 기반, indigo)
+- **취소 이유:** 잘못된 브랜드 소스(`site/` 디렉터리) 를 참조. 실제 canonical 사이트(별도 repo `think-prompt-site`) 는 emerald 팔레트. D-038 로 대체.
+- **취소일:** 2026-04-23
 *(없음 — 새 결정이 기존 것을 번복할 때 여기에 기록)*

@@ -21,17 +21,17 @@ import {
 } from './keywords.js';
 import type { Rule } from './types.js';
 
-// R001 — too short
+// R001 — too short (D-046: severity 2 → 1, structural nudge, not punishment)
 export const r001: Rule = {
   id: 'R001',
   name: 'too_short',
   category: 'structure',
   description: 'Word count is extremely small, making intent hard to infer.',
-  severity: 2,
+  severity: 1,
   detect: ({ meta }) => {
     if (meta.wordCount >= 4) return null;
     return {
-      severity: 2,
+      severity: 1,
       message: '프롬프트가 너무 짧습니다. 목적·대상·기대 결과를 한 줄 더 추가해 보세요.',
       fixHint: 'expand_intent',
     };
@@ -74,7 +74,7 @@ export const r003: Rule = {
   },
 };
 
-// R004 — multiple tasks
+// R004 — multiple tasks (D-046: severity 3 → 4, genuine result pollution)
 // Covers two patterns:
 //   (a) conjunction-heavy: and/그리고/또한/plus appears 3+ times
 //   (b) explicit separators: `요약해줘 // 번역해줘 // 코드로` — 2+ `//` or `/` separators
@@ -84,7 +84,7 @@ export const r004: Rule = {
   name: 'multiple_tasks',
   category: 'structure',
   description: 'Multiple tasks joined with conjunctions or // separators.',
-  severity: 3,
+  severity: 4,
   detect: ({ promptText }) => {
     const lower = promptText.toLowerCase();
     const conjunctionPatterns = [/\band\b/gi, /그리고/gu, /또한/gu, /,\s*또/gu, /\bplus\b/gi];
@@ -121,7 +121,7 @@ export const r004: Rule = {
     if (separatorCount > 0) parts.push(`구분자(/ or //) ${separatorCount}회`);
     if (imperativeCount > 0) parts.push(`명령형 ${imperativeCount}회`);
     return {
-      severity: 3,
+      severity: 4,
       message: '여러 태스크가 섞여 있습니다. 하나씩 나누면 결과 품질이 올라갑니다.',
       evidence: parts.join(', '),
       fixHint: 'split_tasks',
@@ -223,44 +223,44 @@ export const r009: Rule = {
   },
 };
 
-// R010 — no output constraint
+// R010 — no output constraint (D-046: severity 2 → 1, structural nudge)
 export const r010: Rule = {
   id: 'R010',
   name: 'no_constraint',
   category: 'output',
   description: 'No output constraint (length/language/scope).',
-  severity: 2,
+  severity: 1,
   detect: ({ promptText, meta }) => {
     if (meta.wordCount < 15) return null;
     if (anyMatch(promptText, OUTPUT_CONSTRAINT_KEYWORDS)) return null;
     return {
-      severity: 2,
+      severity: 1,
       message: '출력 제약(길이/언어/범위)이 없습니다.',
       fixHint: 'add_output_constraint',
     };
   },
 };
 
-// R011 — question without context
+// R011 — question without context (D-046: severity 2 → 1, brevity not always a problem)
 export const r011: Rule = {
   id: 'R011',
   name: 'question_without_context',
   category: 'context',
   description: 'Short standalone question with no background.',
-  severity: 2,
+  severity: 1,
   detect: ({ promptText, meta }) => {
     if (meta.wordCount >= 15) return null;
     if (!anyMatch(promptText, QUESTION_MARKERS)) return null;
     if (anyMatch(promptText, CONTEXT_KEYWORDS)) return null;
     return {
-      severity: 2,
+      severity: 1,
       message: '배경 없이 단문 질문입니다. 이전에 무엇을 했는지 1줄 덧붙이면 좋습니다.',
       fixHint: 'add_background_to_question',
     };
   },
 };
 
-// R012 — code dump without instruction
+// R012 — code dump without instruction (D-046: severity 3 → 4, major result pollution)
 // Threshold lowered 0.8 → 0.65 after dogfooding surfaced the "300 lines of
 // code + one short question" pattern that slipped through at 0.8.
 export const r012: Rule = {
@@ -268,7 +268,7 @@ export const r012: Rule = {
   name: 'code_dump_no_instruction',
   category: 'structure',
   description: 'Prompt is mostly code (≥65%) with no clear instruction.',
-  severity: 3,
+  severity: 4,
   detect: ({ promptText }) => {
     const codeBlocks = promptText.match(/```[\s\S]*?```/g) ?? [];
     if (codeBlocks.length === 0) return null;
@@ -277,7 +277,7 @@ export const r012: Rule = {
     if (ratio < 0.65) return null;
     if (anyMatch(promptText, IMPERATIVE_KEYWORDS)) return null;
     return {
-      severity: 3,
+      severity: 4,
       message: '코드만 붙여넣으셨습니다. 원하는 동작(디버그/리뷰/설명)을 지시어로 추가하세요.',
       evidence: `코드 비율 ${(ratio * 100).toFixed(0)}%`,
       fixHint: 'add_code_action',

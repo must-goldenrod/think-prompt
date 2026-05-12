@@ -29,6 +29,42 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   ja: '日本語',
 };
 
+/**
+ * IANA timezone per locale — "most representative" region (not a fixed offset),
+ * so DST is handled automatically by Intl.DateTimeFormat. DB keeps UTC ISO;
+ * UI converts at render time (D-042).
+ */
+export const TIMEZONE_BY_LOCALE: Record<Locale, string> = {
+  en: 'America/New_York',
+  ko: 'Asia/Seoul',
+  zh: 'Asia/Shanghai',
+  es: 'Europe/Madrid',
+  ja: 'Asia/Tokyo',
+};
+
+/**
+ * Render a stored UTC ISO timestamp as `YYYY-MM-DD HH:MM:SS` in the locale's
+ * home timezone. `en-CA` is the only built-in locale that emits ISO-style
+ * ordering directly (D-042).
+ */
+export function formatLocalDateTime(isoUtc: string, locale: Locale): string {
+  const d = new Date(isoUtc);
+  if (Number.isNaN(d.getTime())) return isoUtc;
+  const tz = TIMEZONE_BY_LOCALE[locale] ?? 'UTC';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 export interface Dictionary {
   /* common / chrome */
   'nav.overview': string;
@@ -53,6 +89,10 @@ export interface Dictionary {
   'overview.lowest_scoring': string;
   'overview.no_scored_yet': string;
   'overview.recent': string;
+  'overview.patterns_to_watch': string;
+  'overview.patterns_window': string;
+  'overview.patterns_empty': string;
+  'overview.calibrating': string;
 
   /* prompts list */
   'prompts.title': string;
@@ -80,8 +120,7 @@ export interface Dictionary {
   'detail.score': string;
   'detail.rule_hits': string;
   'detail.no_hits': string;
-  'detail.suggested_rewrites': string;
-  'detail.rewrite_none': string;
+  'detail.no_issues_found': string;
 
   /* session */
   'session.title': string;
@@ -162,12 +201,16 @@ const EN: Dictionary = {
   'overview.lowest_scoring': 'Lowest scoring',
   'overview.no_scored_yet': 'no scored prompts yet',
   'overview.recent': 'Recent',
+  'overview.patterns_to_watch': 'Patterns to watch',
+  'overview.patterns_window': 'last 30 days',
+  'overview.patterns_empty': 'No recurring patterns — you are doing great.',
+  'overview.calibrating': 'Calibrating your baseline… {have}/{need} turns',
 
   'prompts.title': 'Prompts',
   'prompts.all_tiers': 'All tiers',
   'prompts.all_sources': 'All sources',
-  'prompts.rule_placeholder': 'rule id e.g. R003',
-  'prompts.filter': 'Filter',
+  'prompts.rule_placeholder': 'Search',
+  'prompts.filter': 'Search',
   'prompts.clear': 'Clear',
   'prompts.col.score': 'Score',
   'prompts.col.tier': 'Tier',
@@ -185,10 +228,9 @@ const EN: Dictionary = {
   'detail.reprocess_hint': '(reprocess after session end to update usage_score)',
   'detail.original': 'Original',
   'detail.score': 'Score',
-  'detail.rule_hits': 'Rule hits',
-  'detail.no_hits': '(no hits)',
-  'detail.suggested_rewrites': 'Suggested rewrites',
-  'detail.rewrite_none': '(none) — try: ',
+  'detail.rule_hits': 'What went wrong',
+  'detail.no_hits': 'No issues detected — this prompt passed every rule.',
+  'detail.no_issues_found': 'No issues detected — this prompt passed every rule.',
 
   'session.title': 'Session',
   'session.turns': 'Turns',
@@ -264,12 +306,16 @@ const KO: Dictionary = {
   'overview.lowest_scoring': '최저 점수',
   'overview.no_scored_yet': '아직 채점된 프롬프트가 없습니다',
   'overview.recent': '최근 항목',
+  'overview.patterns_to_watch': '자주 걸리는 패턴',
+  'overview.patterns_window': '지난 30일',
+  'overview.patterns_empty': '최근 30일 반복 패턴 없음 — 잘하고 계세요.',
+  'overview.calibrating': '당신의 기준선 학습 중… {have}/{need}턴',
 
   'prompts.title': '프롬프트',
   'prompts.all_tiers': '모든 등급',
   'prompts.all_sources': '모든 출처',
-  'prompts.rule_placeholder': '룰 ID (예: R003)',
-  'prompts.filter': '필터',
+  'prompts.rule_placeholder': '검색',
+  'prompts.filter': '검색',
   'prompts.clear': '초기화',
   'prompts.col.score': '점수',
   'prompts.col.tier': '등급',
@@ -287,10 +333,9 @@ const KO: Dictionary = {
   'detail.reprocess_hint': '(세션 종료 후 재처리해야 usage_score 반영)',
   'detail.original': '원문',
   'detail.score': '점수',
-  'detail.rule_hits': '룰 히트',
-  'detail.no_hits': '(히트 없음)',
-  'detail.suggested_rewrites': '개선 제안',
-  'detail.rewrite_none': '(없음) — 다음을 실행: ',
+  'detail.rule_hits': '무엇이 약한가',
+  'detail.no_hits': '발견된 이슈 없음 — 이 프롬프트는 모든 룰을 통과했습니다.',
+  'detail.no_issues_found': '발견된 이슈 없음 — 이 프롬프트는 모든 룰을 통과했습니다.',
 
   'session.title': '세션',
   'session.turns': '턴',
@@ -366,12 +411,16 @@ const ZH: Dictionary = {
   'overview.lowest_scoring': '最低得分',
   'overview.no_scored_yet': '尚无已评分的提示',
   'overview.recent': '最近',
+  'overview.patterns_to_watch': '常见问题模式',
+  'overview.patterns_window': '过去 30 天',
+  'overview.patterns_empty': '过去 30 天无重复模式 — 做得很好。',
+  'overview.calibrating': '正在校准您的基线… {have}/{need} 轮',
 
   'prompts.title': '提示',
   'prompts.all_tiers': '所有等级',
   'prompts.all_sources': '所有来源',
-  'prompts.rule_placeholder': '规则 ID (例如 R003)',
-  'prompts.filter': '筛选',
+  'prompts.rule_placeholder': '搜索',
+  'prompts.filter': '搜索',
   'prompts.clear': '清除',
   'prompts.col.score': '得分',
   'prompts.col.tier': '等级',
@@ -389,10 +438,9 @@ const ZH: Dictionary = {
   'detail.reprocess_hint': '(会话结束后重新处理以更新 usage_score)',
   'detail.original': '原文',
   'detail.score': '得分',
-  'detail.rule_hits': '规则命中',
-  'detail.no_hits': '(无命中)',
-  'detail.suggested_rewrites': '改写建议',
-  'detail.rewrite_none': '(无) — 请尝试: ',
+  'detail.rule_hits': '问题所在',
+  'detail.no_hits': '未发现问题 — 此提示通过了所有规则。',
+  'detail.no_issues_found': '未发现问题 — 此提示通过了所有规则。',
 
   'session.title': '会话',
   'session.turns': '回合',
@@ -468,12 +516,16 @@ const ES: Dictionary = {
   'overview.lowest_scoring': 'Peores puntuaciones',
   'overview.no_scored_yet': 'aún no hay prompts puntuados',
   'overview.recent': 'Recientes',
+  'overview.patterns_to_watch': 'Patrones a vigilar',
+  'overview.patterns_window': 'últimos 30 días',
+  'overview.patterns_empty': 'Sin patrones recurrentes — lo estás haciendo bien.',
+  'overview.calibrating': 'Calibrando tu línea base… {have}/{need} turnos',
 
   'prompts.title': 'Prompts',
   'prompts.all_tiers': 'Todos los niveles',
   'prompts.all_sources': 'Todas las fuentes',
-  'prompts.rule_placeholder': 'ID de regla, p. ej. R003',
-  'prompts.filter': 'Filtrar',
+  'prompts.rule_placeholder': 'Buscar',
+  'prompts.filter': 'Buscar',
   'prompts.clear': 'Limpiar',
   'prompts.col.score': 'Puntuación',
   'prompts.col.tier': 'Nivel',
@@ -491,10 +543,9 @@ const ES: Dictionary = {
   'detail.reprocess_hint': '(reprocesar al finalizar la sesión para actualizar usage_score)',
   'detail.original': 'Original',
   'detail.score': 'Puntuación',
-  'detail.rule_hits': 'Reglas disparadas',
-  'detail.no_hits': '(sin aciertos)',
-  'detail.suggested_rewrites': 'Reescrituras sugeridas',
-  'detail.rewrite_none': '(ninguna) — probar: ',
+  'detail.rule_hits': 'Qué salió mal',
+  'detail.no_hits': 'Sin problemas detectados — este prompt pasó todas las reglas.',
+  'detail.no_issues_found': 'Sin problemas detectados — este prompt pasó todas las reglas.',
 
   'session.title': 'Sesión',
   'session.turns': 'Turnos',
@@ -570,12 +621,16 @@ const JA: Dictionary = {
   'overview.lowest_scoring': '低スコア',
   'overview.no_scored_yet': 'まだ採点されたプロンプトがありません',
   'overview.recent': '最近',
+  'overview.patterns_to_watch': '繰り返しのパターン',
+  'overview.patterns_window': '直近 30 日',
+  'overview.patterns_empty': '直近 30 日の繰り返しパターンなし — 順調です。',
+  'overview.calibrating': 'あなたの基準線を学習中… {have}/{need} ターン',
 
   'prompts.title': 'プロンプト',
   'prompts.all_tiers': 'すべての品質',
   'prompts.all_sources': 'すべての出典',
-  'prompts.rule_placeholder': 'ルール ID (例 R003)',
-  'prompts.filter': '絞り込み',
+  'prompts.rule_placeholder': '検索',
+  'prompts.filter': '検索',
   'prompts.clear': 'クリア',
   'prompts.col.score': 'スコア',
   'prompts.col.tier': '品質',
@@ -593,10 +648,10 @@ const JA: Dictionary = {
   'detail.reprocess_hint': '(セッション終了後に再処理すると usage_score が更新されます)',
   'detail.original': '原文',
   'detail.score': 'スコア',
-  'detail.rule_hits': 'ルールヒット',
-  'detail.no_hits': '(ヒットなし)',
-  'detail.suggested_rewrites': '改善提案',
-  'detail.rewrite_none': '(なし) — 実行: ',
+  'detail.rule_hits': '弱点',
+  'detail.no_hits': '問題は検出されませんでした — このプロンプトはすべてのルールを通過しました。',
+  'detail.no_issues_found':
+    '問題は検出されませんでした — このプロンプトはすべてのルールを通過しました。',
 
   'session.title': 'セッション',
   'session.turns': 'ターン',

@@ -18,7 +18,6 @@ export type QueueJobKind =
   | 'parse_subagent_transcript'
   | 'score_followup'
   | 'judge'
-  | 'rewrite'
   | 'session_end';
 
 export interface QueueJob<T = unknown> {

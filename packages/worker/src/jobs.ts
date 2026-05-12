@@ -1,14 +1,18 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import {
   composeFinalScore,
+  computeConfidence,
   computeUsageScore,
   createLogger,
   finishSubagent,
   llm,
+  loadBaseline,
   loadConfig,
   openDb,
+  refreshBaseline,
   transcript as tp,
   ulid,
+  updateUsageEfficiencyFeatures,
   upsertQualityScore,
 } from '@think-prompt/core';
 
@@ -117,9 +121,9 @@ export async function handleParseTranscript(
   // Compute usage scores per prompt_usage in this session
   const usages = ctx.db
     .prepare(
-      `SELECT id, prompt_hash FROM prompt_usages WHERE session_id = ? ORDER BY turn_index ASC`
+      `SELECT id, prompt_hash, turn_index FROM prompt_usages WHERE session_id = ? ORDER BY turn_index ASC`
     )
-    .all(payload.session_id) as Array<{ id: string; prompt_hash: string }>;
+    .all(payload.session_id) as Array<{ id: string; prompt_hash: string; turn_index: number }>;
 
   const totalCalls = toolSummary.reduce((a, b) => a + b.calls, 0);
   const rollup = ctx.db
@@ -130,7 +134,19 @@ export async function handleParseTranscript(
   const calls = rollup.calls ?? totalCalls;
   const fails = rollup.fails ?? 0;
 
-  for (const u of usages) {
+  // D-046 §3.4.1: extract per-turn efficiency features from the transcript.
+  // Zipped positionally against usages[] in their turn_index order. When the
+  // counts disagree (e.g. transcript clipped) we fall back to nulls for the
+  // overflow — the scorer treats missing efficiency as "not present" and
+  // renormalizes remaining weights.
+  const turnFeatures = tp.extractTurnEfficiency(events);
+
+  // Current baseline (may be null during cold-start).
+  const baseline = loadBaseline(ctx.db);
+
+  for (let i = 0; i < usages.length; i++) {
+    const u = usages[i]!;
+    const tf = turnFeatures[i];
     const hashSeenBefore = ctx.db
       .prepare(
         `SELECT COUNT(*) AS c FROM prompt_usages WHERE prompt_hash=? AND session_id=? AND id < ?`
@@ -144,6 +160,17 @@ export async function handleParseTranscript(
            FROM outcomes WHERE usage_id = ?`
       )
       .get(u.id) as { ups: number | null; downs: number | null };
+
+    // Persist per-turn efficiency features on prompt_usages so downstream
+    // re-scoring and dashboards can pick them up without reparsing.
+    if (tf) {
+      updateUsageEfficiencyFeatures(ctx.db, u.id, {
+        first_shot_success: tf.firstShotSuccess,
+        tool_call_count: tf.toolCalls,
+        follow_up_depth: tf.followUpDepth,
+      });
+    }
+
     const usageScore = computeUsageScore({
       toolCalls: calls,
       toolFails: fails,
@@ -151,16 +178,48 @@ export async function handleParseTranscript(
       responseLength: 0, // unknown per-usage without deeper correlation
       feedbackUps: fb.ups ?? 0,
       feedbackDowns: fb.downs ?? 0,
+      firstShotSuccess: tf?.firstShotSuccess ?? null,
+      turnToolCallCount: tf?.toolCalls ?? null,
+      followUpDepth: tf?.followUpDepth ?? null,
     });
+
     const existing = ctx.db
       .prepare(`SELECT rule_score, judge_score FROM quality_scores WHERE usage_id=?`)
       .get(u.id) as { rule_score: number; judge_score: number | null } | undefined;
     if (!existing) continue;
-    const { final_score, tier } = composeFinalScore({
+
+    // D-046: feed the asymmetric cap input (max severity + severity-3 count).
+    const sev = ctx.db
+      .prepare(
+        `SELECT COALESCE(MAX(severity),0) AS maxsev,
+                SUM(CASE WHEN severity=3 THEN 1 ELSE 0 END) AS sev3
+           FROM rule_hits WHERE usage_id=?`
+      )
+      .get(u.id) as { maxsev: number; sev3: number | null };
+
+    const {
+      final_score,
+      tier,
+      cap,
+      bonus: appliedBonus,
+    } = composeFinalScore({
       rule_score: existing.rule_score,
       usage_score: usageScore,
       judge_score: existing.judge_score ?? null,
+      maxSeverity: sev.maxsev,
+      severity3Count: sev.sev3 ?? 0,
     });
+
+    // D-046 §6 confidence. baseline_delta is null during cold-start — the
+    // computeConfidence helper treats null as "not a low-confidence signal".
+    const baselineDelta = baseline ? Math.round(final_score - baseline.avg_final_score) : null;
+    const confidence = computeConfidence({
+      maxSeverity: sev.maxsev,
+      hasUsageScore: usageScore != null,
+      hasJudgeScore: existing.judge_score != null,
+      baselineDelta,
+    });
+
     upsertQualityScore(ctx.db, {
       usage_id: u.id,
       rule_score: existing.rule_score,
@@ -169,8 +228,24 @@ export async function handleParseTranscript(
       final_score,
       tier,
       rules_version: 1,
+      efficiency_score: tf
+        ? Math.round(
+            (tf.firstShotSuccess ? 60 : 0) +
+              (tf.toolCalls <= 3 ? 27 : tf.toolCalls <= 8 ? 22 : 7) +
+              (tf.followUpDepth <= 1 ? 10 : tf.followUpDepth === 2 ? 7 : 4)
+          )
+        : null,
+      bonus_score: appliedBonus ?? 0,
+      cap_applied: cap ?? null,
+      confidence,
+      baseline_delta: baselineDelta,
     });
   }
+
+  // D-046 §5: refresh baseline snapshot once per transcript parse. Cheap
+  // (~one aggregate query) and keeps delta fresh without a separate cron.
+  refreshBaseline(ctx.db);
+
   ctx.logger.info(
     { session_id: payload.session_id, events: events.length, usages: usages.length },
     'session transcript parsed & rescored'
@@ -182,7 +257,10 @@ export async function handleSessionEnd(
   ctx: JobContext,
   payload: { session_id: string }
 ): Promise<'done' | 'retry'> {
-  // Enqueue judge jobs for low-scoring prompts in this session, if LLM enabled.
+  // Enqueue judge jobs for LOW-CONFIDENCE prompts in this session (D-046 §4.1).
+  // The old `final_score < threshold` trigger is kept as a fallback so scoring
+  // for pre-D-046 rows (where confidence is still NULL) still benefits from
+  // judge review.
   if (!ctx.config.llm.enabled) return 'done';
   const apiKey = process.env[ctx.config.llm.api_key_env];
   if (!apiKey) return 'done';
@@ -192,8 +270,8 @@ export async function handleSessionEnd(
          FROM quality_scores q
          JOIN prompt_usages u ON u.id = q.usage_id
         WHERE u.session_id = ?
-          AND q.final_score < ?
-          AND q.judge_score IS NULL`
+          AND q.judge_score IS NULL
+          AND (q.confidence = 'low' OR (q.confidence IS NULL AND q.final_score < ?))`
     )
     .all(payload.session_id, ctx.config.llm.judge_threshold_score) as Array<{ usage_id: string }>;
 
@@ -347,93 +425,10 @@ export async function handleJudge(
   }
 }
 
-const REWRITE_SYSTEM = `You rewrite developer prompts to maximize clarity and reliability for Claude Code.
-Follow this structure in the improved version:
-1) Goal — one sentence
-2) Context — what project/domain/constraints
-3) Task — the single concrete ask
-4) Output format — explicit (JSON schema / bullets / length)
-5) Success criteria — how to know it worked
-6) Optional: 1 short example
-
-Rules:
-- Preserve the user's original intent exactly.
-- Do NOT add fabricated facts or hidden constraints.
-- Keep Korean→Korean, English→English unless user mixed them.
-
-Return STRICT JSON only:
-{"after_text": "<improved prompt>", "reason": "<2-3 sentences>", "applied_fixes": ["<rule_id>", ...]}`;
-
-export async function handleRewrite(
-  ctx: JobContext,
-  payload: { usage_id: string }
-): Promise<'done' | 'retry'> {
-  if (!ctx.config.llm.enabled) return 'done';
-  const apiKey = process.env[ctx.config.llm.api_key_env];
-  if (!apiKey) return 'done';
-  const u = ctx.db
-    .prepare(`SELECT pii_masked, prompt_text FROM prompt_usages WHERE id=?`)
-    .get(payload.usage_id) as { pii_masked: string; prompt_text: string } | undefined;
-  if (!u) return 'done';
-  const hits = ctx.db
-    .prepare(`SELECT rule_id, severity, message FROM rule_hits WHERE usage_id=?`)
-    .all(payload.usage_id) as Array<{ rule_id: string; severity: number; message: string }>;
-  const body = [
-    '[ORIGINAL PROMPT]',
-    u.pii_masked,
-    '',
-    '[DETECTED ISSUES]',
-    hits.length === 0
-      ? '(none)'
-      : hits.map((h) => `- ${h.rule_id} (sev ${h.severity}): ${h.message}`).join('\n'),
-    '[END]',
-  ].join('\n');
-
-  try {
-    const res = await llm.anthropicMessage({
-      apiKey,
-      model: ctx.config.llm.model,
-      system: REWRITE_SYSTEM,
-      messages: [{ role: 'user', content: body }],
-      maxTokens: 800,
-      cacheSystem: true,
-    });
-    const parsed = llm.parseStrictJson<{
-      after_text: string;
-      reason?: string;
-      applied_fixes?: string[];
-    }>(res.text);
-    if (!parsed || !parsed.after_text) {
-      ctx.logger.warn({ usage_id: payload.usage_id }, 'rewrite parse failed');
-      return 'done';
-    }
-    ctx.db
-      .prepare(
-        `INSERT INTO rewrites(id, usage_id, before_text, after_text, reason, model, status, created_at)
-         VALUES (?,?,?,?,?,?,?,?)`
-      )
-      .run(
-        ulid(),
-        payload.usage_id,
-        u.prompt_text,
-        parsed.after_text,
-        parsed.reason ?? null,
-        ctx.config.llm.model,
-        'proposed',
-        new Date().toISOString()
-      );
-    return 'done';
-  } catch (err) {
-    ctx.logger.error({ err }, 'rewrite failed');
-    return 'retry';
-  }
-}
-
 export type JobHandler = (ctx: JobContext, payload: unknown) => Promise<'done' | 'retry'>;
 export const HANDLERS: Record<string, JobHandler> = {
   parse_subagent_transcript: handleParseSubagentTranscript as JobHandler,
   parse_transcript: handleParseTranscript as JobHandler,
   session_end: handleSessionEnd as JobHandler,
   judge: handleJudge as JobHandler,
-  rewrite: handleRewrite as JobHandler,
 };

@@ -162,3 +162,67 @@ export function summarizeToolUse(events: TranscriptEvent[]): { toolName: string;
   }
   return [...map.entries()].map(([toolName, calls]) => ({ toolName, calls }));
 }
+
+/**
+ * D-046 §3.4.1: per-user-turn efficiency features.
+ *
+ * Walks the transcript in order and, for every `user` event, aggregates:
+ *   - `toolCalls`   — tool_use events that happen before the next user turn
+ *   - `firstShotSuccess` — 1 if the NEXT user turn does not look like a
+ *     correction ("다시/아니/취소/redo/no wait"), 0 otherwise
+ *   - `followUpDepth` — 1 for a fresh user turn, ++ when consecutive
+ *     turns are correction-style (indicating the previous turn did not
+ *     land cleanly)
+ *
+ * Returned in the same order as user turns appear in the transcript so
+ * callers can zip with their own `turn_index` list.
+ */
+const CORRECTION_PATTERN =
+  /(?:^|\s)(다시|아니|취소|재시도|redo|no\s*wait|잘못|wrong|undo)(?:$|\s|[.!?,])/i;
+
+export interface TurnEfficiency {
+  userTurnIndex: number; // index into events[] where the user event lives
+  toolCalls: number;
+  firstShotSuccess: 0 | 1;
+  followUpDepth: number;
+}
+
+export function extractTurnEfficiency(events: TranscriptEvent[]): TurnEfficiency[] {
+  const userIdxs: number[] = [];
+  for (let i = 0; i < events.length; i++) {
+    if (events[i]!.kind === 'user') userIdxs.push(i);
+  }
+
+  const out: TurnEfficiency[] = [];
+  let depth = 1;
+  for (let u = 0; u < userIdxs.length; u++) {
+    const start = userIdxs[u]!;
+    const end = u + 1 < userIdxs.length ? userIdxs[u + 1]! : events.length;
+
+    let toolCalls = 0;
+    for (let j = start + 1; j < end; j++) {
+      if (events[j]!.kind === 'tool_use') toolCalls += 1;
+    }
+
+    // first-shot success = next user turn is NOT a correction.
+    // Last turn defaults to 1 (no evidence of failure).
+    let firstShot: 0 | 1 = 1;
+    if (u + 1 < userIdxs.length) {
+      const nextText = events[userIdxs[u + 1]!]?.text ?? '';
+      if (CORRECTION_PATTERN.test(nextText)) firstShot = 0;
+    }
+
+    out.push({
+      userTurnIndex: start,
+      toolCalls,
+      firstShotSuccess: firstShot,
+      followUpDepth: depth,
+    });
+
+    // If the CURRENT turn was a correction, the NEXT turn's depth grows.
+    const curText = events[start]?.text ?? '';
+    depth = CORRECTION_PATTERN.test(curText) ? depth + 1 : 1;
+  }
+
+  return out;
+}

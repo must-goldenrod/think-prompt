@@ -15,13 +15,16 @@ import {
 import { getRulesCatalog } from '@think-prompt/rules';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import {
+  baselineDeltaLine,
+  confidenceBadge,
   escapeHtml,
   layout,
   renderDailyChart,
   renderDeepAnalysisSection,
   tierBadge,
 } from './html.js';
-import { type Locale, resolveLocale, t } from './i18n.js';
+import { type Locale, formatLocalDateTime, resolveLocale, t } from './i18n.js';
+import { getRuleExampleKo, getRuleShortTipKo } from './rule-examples.js';
 
 export interface DashboardDeps {
   config?: Config;
@@ -88,7 +91,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
    */
   const FAVICON_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-    '<rect width="32" height="32" rx="8" fill="#6366f1"/>' +
+    '<rect width="32" height="32" rx="8" fill="#10b981"/>' +
     '<rect x="7" y="17" width="4" height="8" fill="white"/>' +
     '<rect x="14" y="12" width="4" height="13" fill="white"/>' +
     '<rect x="21" y="8" width="4" height="17" fill="white"/>' +
@@ -246,6 +249,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       )
       .all() as Array<{ id: string; snippet: string; final_score: number; tier: string }>;
 
+    // Top 5 recurring rule hits over the last 30 days — powers the
+    // "Patterns to watch" section (D-044). Pattern = which rule fires
+    // repeatedly, not which individual prompt was bad. Intended to make
+    // habits visible so users can target *one* fix instead of chasing
+    // every flagged prompt.
+    const patternRows = db
+      .prepare(
+        `SELECT rh.rule_id, COUNT(*) AS hits
+           FROM rule_hits rh
+           JOIN prompt_usages pu ON pu.id = rh.usage_id
+          WHERE pu.created_at >= datetime('now', '-30 days')
+          GROUP BY rh.rule_id
+          ORDER BY hits DESC
+          LIMIT 5`
+      )
+      .all() as Array<{ rule_id: string; hits: number }>;
+    // Severity → left bar color (same palette as the detail page lesson
+    // cards so the visual language stays consistent).
+    const patternSevBar = (ruleId: string): string => {
+      const def = getRulesCatalog().find((r) => r.id === ruleId);
+      const sev = def?.severity ?? 1;
+      if (sev >= 3) return 'bg-red-500';
+      if (sev === 2) return 'bg-orange-500';
+      return 'bg-yellow-500';
+    };
+
     // Tier tiles — each tier gets its own card with a big mono number, matching
     // the "Total prompts" card's visual weight so all 6 (Total + 5 tiers) scan
     // as a single glanceable KPI row. Left color bar = tier identity; percentage
@@ -290,8 +319,19 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
 
     const chartHtml = renderDailyChart(days);
 
+    // D-046 §8 cold-start: show "calibrating… N/50" banner while personal
+    // baseline isn't yet usable. Hidden once enough data accumulates.
+    const BASELINE_MIN = 50;
+    const baselineBanner =
+      totals.c < BASELINE_MIN
+        ? `<div class="mb-6 rounded-xl border border-dashed border-gray-300 dark:border-zinc-600 bg-gray-50 dark:bg-zinc-800/60 px-4 py-3 text-sm text-gray-600 dark:text-zinc-300">${escapeHtml(
+            t(locale, 'overview.calibrating', { have: totals.c, need: BASELINE_MIN })
+          )}</div>`
+        : '';
+
     const body = `
       <h1 class="text-2xl font-bold mb-6">${escapeHtml(t(locale, 'overview.title'))}</h1>
+      ${baselineBanner}
       <section aria-label="${escapeHtml(t(locale, 'overview.tier_breakdown'))}" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-5">
           <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold">${escapeHtml(t(locale, 'overview.total_prompts'))}</div>
@@ -299,6 +339,32 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           <div class="text-xs text-gray-400 mt-1">${escapeHtml(t(locale, 'overview.last_n_days', { n: DAYS }))}: ${windowTotal.toLocaleString()}</div>
         </div>
         ${tierTilesHtml}
+      </section>
+
+      <!-- Patterns to watch — top 5 recurring rule hits over last 30 days -->
+      <section class="mb-8">
+        <h2 class="text-lg font-bold mb-3 flex items-baseline gap-2">
+          ${escapeHtml(t(locale, 'overview.patterns_to_watch'))}
+          <span class="text-xs font-normal text-gray-500">${escapeHtml(t(locale, 'overview.patterns_window'))}</span>
+        </h2>
+        ${
+          patternRows.length === 0
+            ? `<div class="text-gray-400 text-sm">${escapeHtml(t(locale, 'overview.patterns_empty'))}</div>`
+            : `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 overflow-hidden">${patternRows
+                .map((p) => {
+                  const shortTip = locale === 'ko' ? getRuleShortTipKo(p.rule_id) : null;
+                  const ruleDef = getRulesCatalog().find((r) => r.id === p.rule_id);
+                  const fallback = ruleDef?.description ?? p.rule_id;
+                  const line = shortTip ?? fallback;
+                  return `<div class="relative flex items-center gap-3 p-3 pl-5">
+                    <div class="absolute left-0 top-0 h-full w-1 ${patternSevBar(p.rule_id)}"></div>
+                    <span class="font-mono text-xs font-semibold w-12 text-gray-700 dark:text-zinc-200">${escapeHtml(p.rule_id)}</span>
+                    <span class="text-sm text-gray-700 dark:text-zinc-200 flex-1 truncate">${escapeHtml(line)}</span>
+                    <span class="text-xs font-mono text-gray-400 tabular-nums">${p.hits}</span>
+                  </div>`;
+                })
+                .join('')}</div>`
+        }
       </section>
 
       <section class="mb-8">
@@ -341,7 +407,7 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
                 `<a href="/prompts/${r.id}?lang=${locale}" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-700">
                    <span class="font-mono text-sm w-10 text-right">${r.score >= 0 ? r.score : '-'}</span>
                    ${tierBadge(r.tier, locale)}
-                   <span class="text-xs text-gray-400 w-36">${escapeHtml(r.created_at)}</span>
+                   <span class="text-xs text-gray-400 w-36">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</span>
                    <span class="text-sm text-gray-700 dark:text-zinc-200 flex-1 truncate">${escapeHtml(r.snippet)}</span>
                  </a>`
             )
@@ -385,7 +451,25 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
         `SELECT pu.id, substr(pu.prompt_text,1,160) AS snippet, pu.created_at, pu.char_len,
                 COALESCE(qs.final_score, -1) AS score, COALESCE(qs.tier, 'n/a') AS tier,
                 COALESCE(s.source, 'claude-code') AS source,
-                (SELECT COUNT(*) FROM rule_hits rh WHERE rh.usage_id=pu.id) AS hits
+                (SELECT COUNT(*) FROM rule_hits rh WHERE rh.usage_id=pu.id) AS hits,
+                -- Top hit = highest severity, ties broken by rule_id ASC so the
+                -- inline hint is stable across re-renders. Used only for
+                -- weak/bad tier rows (D-043).
+                (SELECT rule_id FROM rule_hits rh
+                  WHERE rh.usage_id = pu.id
+                  ORDER BY rh.severity DESC, rh.rule_id ASC
+                  LIMIT 1) AS top_rule_id,
+                -- D-046 follow-up: surface ALL rule-hit messages on the
+                -- Prompts list so users see the same verbatim wording as
+                -- on the detail page's "What went wrong" section. json
+                -- array preserves order (severity DESC, rule_id ASC).
+                (SELECT json_group_array(message)
+                   FROM (
+                     SELECT message FROM rule_hits rh2
+                      WHERE rh2.usage_id = pu.id
+                      ORDER BY rh2.severity DESC, rh2.rule_id ASC
+                   )
+                ) AS hit_messages_json
            FROM prompt_usages pu
            LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
            LEFT JOIN sessions s ON s.id = pu.session_id
@@ -401,6 +485,8 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       tier: string;
       source: string;
       hits: number;
+      top_rule_id: string | null;
+      hit_messages_json: string | null;
     }>;
 
     const sourceOptions = [
@@ -441,27 +527,53 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
       <table class="w-full text-sm bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
         <thead class="bg-gray-100 dark:bg-zinc-700 text-left">
           <tr>
-            <th class="p-2 w-16">${escapeHtml(t(locale, 'prompts.col.score'))}</th>
-            <th class="p-2 w-20">${escapeHtml(t(locale, 'prompts.col.tier'))}</th>
-            <th class="p-2 w-24">${escapeHtml(t(locale, 'prompts.col.source'))}</th>
-            <th class="p-2 w-10">${escapeHtml(t(locale, 'prompts.col.hits'))}</th>
-            <th class="p-2">${escapeHtml(t(locale, 'prompts.col.prompt'))}</th>
             <th class="p-2 w-40">${escapeHtml(t(locale, 'prompts.col.created'))}</th>
+            <th class="p-2 w-16">${escapeHtml(t(locale, 'prompts.col.score'))}</th>
+            <th class="p-2 w-24">${escapeHtml(t(locale, 'prompts.col.tier'))}</th>
+            <th class="p-2 w-24">${escapeHtml(t(locale, 'prompts.col.source'))}</th>
+            <th class="p-2">${escapeHtml(t(locale, 'prompts.col.prompt'))}</th>
           </tr>
         </thead>
         <tbody>
           ${rows
-            .map(
-              (r) =>
-                `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
-                   <td class="p-2 font-mono">${r.score >= 0 ? r.score : '-'}</td>
-                   <td class="p-2">${tierBadge(r.tier, locale)}</td>
-                   <td class="p-2 text-xs text-gray-600 dark:text-zinc-300">${escapeHtml(r.source)}</td>
-                   <td class="p-2 text-gray-500">${r.hits}</td>
-                   <td class="p-2 truncate max-w-[32rem]">${escapeHtml(r.snippet)}</td>
-                   <td class="p-2 text-gray-400 text-xs">${escapeHtml(r.created_at)}</td>
-                 </tr>`
-            )
+            .map((r) => {
+              // D-046 follow-up v3: render every rule-hit message verbatim
+              // as its own "→ …" line (severity DESC order). Same wording
+              // as the detail page's "What went wrong" section. No badge,
+              // no truncation — full text wraps within the cell.
+              let hitMessages: string[] = [];
+              if (r.hit_messages_json) {
+                try {
+                  const parsed = JSON.parse(r.hit_messages_json) as unknown;
+                  if (Array.isArray(parsed)) {
+                    hitMessages = parsed.filter(
+                      (m): m is string => typeof m === 'string' && m.length > 0
+                    );
+                  }
+                } catch {
+                  // Malformed aggregate — skip the hint rather than throw.
+                }
+              }
+              const hintLine =
+                hitMessages.length > 0
+                  ? `<div class="mt-1 space-y-0.5">${hitMessages
+                      .map(
+                        (m) =>
+                          `<div class="text-xs text-gray-600 dark:text-zinc-400 italic leading-snug break-words">→ ${escapeHtml(m)}</div>`
+                      )
+                      .join('')}</div>`
+                  : '';
+              return `<tr class="border-t border-gray-100 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer" onclick="location.href='/prompts/${r.id}?lang=${locale}'">
+                   <td class="p-2 text-gray-500 text-xs font-mono whitespace-nowrap align-top">${escapeHtml(formatLocalDateTime(r.created_at, locale))}</td>
+                   <td class="p-2 font-mono align-top">${r.score >= 0 ? r.score : '-'}</td>
+                   <td class="p-2 align-top">${tierBadge(r.tier, locale)}</td>
+                   <td class="p-2 text-xs text-gray-600 dark:text-zinc-300 align-top">${escapeHtml(r.source)}</td>
+                   <td class="p-2 max-w-[32rem] align-top">
+                     <div class="truncate">${escapeHtml(r.snippet)}</div>
+                     ${hintLine}
+                   </td>
+                 </tr>`;
+            })
             .join('')}
         </tbody>
       </table>`;
@@ -503,19 +615,23 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
           judge_score: number | null;
           final_score: number;
           tier: string;
+          confidence: string | null;
+          baseline_delta: number | null;
+          efficiency_score: number | null;
+          bonus_score: number | null;
+          cap_applied: number | null;
         }
       | undefined;
+
+    // D-046: pull latest baseline average so we can render "vs your avg N".
+    const baselineRow = db
+      .prepare(
+        `SELECT avg_final_score FROM user_baseline_snapshots ORDER BY computed_at DESC LIMIT 1`
+      )
+      .get() as { avg_final_score: number } | undefined;
     const hits = db
       .prepare(`SELECT * FROM rule_hits WHERE usage_id=? ORDER BY severity DESC`)
       .all(id) as Array<{ rule_id: string; severity: number; message: string }>;
-    const rewrites = db
-      .prepare(`SELECT * FROM rewrites WHERE usage_id=? ORDER BY created_at DESC`)
-      .all(id) as Array<{
-      status: string;
-      created_at: string;
-      after_text: string;
-      reason: string | null;
-    }>;
     const deepAnalyses = getDeepAnalyses(db, id);
     const fb = getOutcomeTotals(db, id);
     const detected = u.detected_language ?? '?';
@@ -526,88 +642,128 @@ export function buildDashboardServer(deps: DashboardDeps = {}): FastifyInstance 
     const consentState = currentConfig.analysis.deep_consent;
     const analyzeEnabled = currentConfig.llm.enabled && consentState === 'granted';
 
+    // ----- Severity → color class for the left accent bar of lesson cards --
+    const sevBar = (sev: number): string => {
+      if (sev >= 3) return 'bg-red-500';
+      if (sev === 2) return 'bg-orange-500';
+      return 'bg-yellow-500';
+    };
+    const sevTextCls = (sev: number): string => {
+      if (sev >= 3) return 'text-red-700 dark:text-red-300';
+      if (sev === 2) return 'text-orange-700 dark:text-orange-300';
+      return 'text-yellow-700 dark:text-yellow-300';
+    };
+
+    // Each rule hit renders as a lesson card: severity bar on the left, rule
+    // id + severity + message up top, then the Korean bad→good example
+    // inline (KO locale only — other locales get a rule-catalog deep-link).
+    const ruleCards =
+      hits.length === 0
+        ? `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4 text-sm text-gray-400">${escapeHtml(t(locale, 'detail.no_hits'))}</div>`
+        : hits
+            .map((h) => {
+              const ex = locale === 'ko' ? getRuleExampleKo(h.rule_id) : null;
+              const exampleBlock = ex
+                ? `<div class="mt-3 pt-3 border-t border-gray-100 dark:border-zinc-700 space-y-1.5 text-sm">
+                     <div><span class="inline-block w-14 text-xs font-mono uppercase tracking-widest text-gray-500">약한 예</span><span class="text-gray-700 dark:text-zinc-200">${escapeHtml(ex.bad)}</span></div>
+                     <div><span class="inline-block w-14 text-xs font-mono uppercase tracking-widest text-gray-500">강한 예</span><span class="text-gray-700 dark:text-zinc-200">${escapeHtml(ex.good)}</span></div>
+                     ${ex.tip ? `<div class="mt-2 text-xs text-gray-500 italic">💡 ${escapeHtml(ex.tip)}</div>` : ''}
+                   </div>`
+                : '';
+              return `
+                <div class="relative bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
+                  <div class="absolute left-0 top-0 h-full w-1 ${sevBar(h.severity)}"></div>
+                  <div class="p-4 pl-5">
+                    <div class="flex items-center gap-3 mb-1.5">
+                      <span class="font-mono text-sm font-semibold ${sevTextCls(h.severity)}">${escapeHtml(h.rule_id)}</span>
+                      <span class="text-[10px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300">SEV ${h.severity}</span>
+                    </div>
+                    <div class="text-sm text-gray-800 dark:text-zinc-100">${escapeHtml(h.message)}</div>
+                    ${exampleBlock}
+                  </div>
+                </div>`;
+            })
+            .join('');
+
     const body = `
       <div class="mb-3"><a href="/prompts?lang=${locale}" class="text-accent text-sm hover:underline">${escapeHtml(t(locale, 'common.back'))}</a></div>
-      <h1 class="text-2xl font-bold mb-2">${escapeHtml(t(locale, 'detail.title'))} ${escapeHtml(u.id.slice(-8))}</h1>
-      <div class="text-xs text-gray-500 mb-4">
-        ${escapeHtml(t(locale, 'detail.session'))} <a class="underline" href="/sessions/${u.session_id}?lang=${locale}">${escapeHtml(u.session_id)}</a>
-        · ${u.char_len} ${escapeHtml(t(locale, 'detail.chars'))} · ${u.word_count} ${escapeHtml(t(locale, 'detail.words'))} · ${escapeHtml(t(locale, 'detail.turn'))} ${u.turn_index}
-        · <span class="uppercase">${escapeHtml(detected)}</span>
-        · ${escapeHtml(u.created_at)}
-      </div>
 
-      <div class="mb-4 flex items-center gap-3">
+      <!-- HERO · Score + one-line diagnosis + sub-scores -->
+      <section class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm p-6 mb-6">
+        <div class="flex items-start gap-5 flex-wrap">
+          <div class="flex items-baseline gap-2">
+            <div class="text-5xl font-mono font-semibold">${score ? score.final_score : '—'}</div>
+            <div class="text-sm text-gray-400 font-mono">/100</div>
+          </div>
+          <div class="flex-1 min-w-[16rem]">
+            <div class="flex items-center gap-2 flex-wrap">
+              ${score ? tierBadge(score.tier, locale) : ''}
+              ${score ? confidenceBadge(score.confidence, locale) : ''}
+              ${score ? baselineDeltaLine(score.baseline_delta, baselineRow?.avg_final_score ?? null, locale) : ''}
+            </div>
+            ${
+              hits.length === 0
+                ? `<div class="text-sm text-gray-500 dark:text-zinc-400 leading-relaxed mt-2">${escapeHtml(t(locale, 'detail.no_issues_found'))}</div>`
+                : ''
+            }
+          </div>
+        </div>
+        ${
+          score
+            ? `<div class="mt-5 pt-5 border-t border-gray-100 dark:border-zinc-700 text-xs text-gray-400">rule ${score.rule_score} · usage ${score.usage_score ?? '–'} · judge ${score.judge_score ?? '–'} · eff ${score.efficiency_score ?? '–'} · bonus ${score.bonus_score ?? 0}${score.cap_applied != null ? ` · cap ${score.cap_applied}` : ''}</div>`
+            : ''
+        }
+      </section>
+
+      <!-- ORIGINAL -->
+      <section class="mb-6">
+        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-semibold mb-2">${escapeHtml(t(locale, 'detail.original'))}</div>
+          <pre class="text-sm">${escapeHtml(u.prompt_text)}</pre>
+        </div>
+      </section>
+
+      <!-- WHAT WENT WRONG · rule hits as lesson cards -->
+      <section class="mb-6">
+        <h2 class="font-bold mb-3 flex items-center gap-2">
+          ${escapeHtml(t(locale, 'detail.rule_hits'))}
+          <span class="text-xs font-normal text-gray-500 font-mono">${hits.length}</span>
+        </h2>
+        <div class="space-y-3">
+          ${ruleCards}
+        </div>
+      </section>
+
+      <!-- DEEP ANALYSIS -->
+      <section class="mb-6">
+        <h2 class="font-bold mb-3">${escapeHtml(t(locale, 'detail.deep_analysis'))}</h2>
+        ${renderDeepAnalysisSection(u.id, locale, consentState, currentConfig.llm.enabled, analyzeEnabled, deepAnalyses)}
+      </section>
+
+      <!-- FEEDBACK · demoted below main content so users rate AFTER reading -->
+      <section class="mb-6 pt-4 border-t border-gray-100 dark:border-zinc-700 flex items-center gap-3 flex-wrap">
         <span class="text-xs text-gray-500">${escapeHtml(t(locale, 'detail.feedback'))}</span>
         <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
           <input type="hidden" name="rating" value="up" />
-          <button class="px-3 py-1 rounded border border-green-300 bg-green-50 dark:bg-green-900 hover:bg-green-100 text-sm">👍 ${fb.ups}</button>
+          <button class="px-3 py-1 rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 text-sm transition-colors">👍 ${fb.ups}</button>
         </form>
         <form method="POST" action="/prompts/${escapeHtml(u.id)}/feedback" style="display:inline">
           <input type="hidden" name="rating" value="down" />
-          <button class="px-3 py-1 rounded border border-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 text-sm">👎 ${fb.downs}</button>
+          <button class="px-3 py-1 rounded-lg border border-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-sm transition-colors">👎 ${fb.downs}</button>
         </form>
         <span class="text-xs text-gray-400">${escapeHtml(t(locale, 'detail.reprocess_hint'))}</span>
-      </div>
+      </section>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="md:col-span-2 bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-          <div class="text-xs text-gray-500 mb-2">${escapeHtml(t(locale, 'detail.original'))}</div>
-          <pre class="text-sm">${escapeHtml(u.prompt_text)}</pre>
+      <!-- META · debugging info, collapsed by default -->
+      <details class="text-xs text-gray-500">
+        <summary class="cursor-pointer select-none hover:text-accent">${escapeHtml(t(locale, 'detail.title'))} ${escapeHtml(u.id.slice(-8))}</summary>
+        <div class="mt-2 pl-4 space-y-1 font-mono">
+          <div>id: ${escapeHtml(u.id)}</div>
+          <div>${escapeHtml(t(locale, 'detail.session'))}: <a class="underline hover:text-accent" href="/sessions/${u.session_id}?lang=${locale}">${escapeHtml(u.session_id)}</a></div>
+          <div>${u.char_len} ${escapeHtml(t(locale, 'detail.chars'))} · ${u.word_count} ${escapeHtml(t(locale, 'detail.words'))} · ${escapeHtml(t(locale, 'detail.turn'))} ${u.turn_index} · <span class="uppercase">${escapeHtml(detected)}</span></div>
+          <div>${escapeHtml(formatLocalDateTime(u.created_at, locale))}</div>
         </div>
-        <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-          <div class="text-xs text-gray-500 mb-3">${escapeHtml(t(locale, 'detail.score'))}</div>
-          ${
-            score
-              ? `<div class="text-4xl font-mono mb-3">${score.final_score}</div>
-                 <div class="mb-3">${tierBadge(score.tier, locale)}</div>
-                 <div class="text-xs space-y-1 text-gray-600 dark:text-zinc-300">
-                   <div>rule: ${score.rule_score}</div>
-                   <div>usage: ${score.usage_score ?? '-'}</div>
-                   <div>judge: ${score.judge_score ?? '-'}</div>
-                 </div>`
-              : `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'common.no_data'))}</div>`
-          }
-        </div>
-      </div>
-
-      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.rule_hits'))}</h2>
-      <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm divide-y divide-gray-100 dark:divide-zinc-700 mb-6">
-        ${
-          hits.length === 0
-            ? `<div class="p-3 text-sm text-gray-400">${escapeHtml(t(locale, 'detail.no_hits'))}</div>`
-            : hits
-                .map(
-                  (h) =>
-                    `<div class="p-3 flex items-start gap-3">
-                       <span class="font-mono text-sm text-yellow-700">${escapeHtml(h.rule_id)}</span>
-                       <span class="text-xs text-gray-500">sev ${h.severity}</span>
-                       <span class="text-sm flex-1">${escapeHtml(h.message)}</span>
-                     </div>`
-                )
-                .join('')
-        }
-      </div>
-
-      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.suggested_rewrites'))}</h2>
-      <div class="space-y-3 mb-6">
-        ${
-          rewrites.length === 0
-            ? `<div class="text-sm text-gray-400">${escapeHtml(t(locale, 'detail.rewrite_none'))}<code>think-prompt rewrite ${escapeHtml(u.id)}</code></div>`
-            : rewrites
-                .map(
-                  (r) =>
-                    `<div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">
-                       <div class="text-xs text-gray-500 mb-2">${escapeHtml(r.status)} · ${escapeHtml(r.created_at)}</div>
-                       <pre class="text-sm">${escapeHtml(r.after_text)}</pre>
-                       ${r.reason ? `<div class="mt-2 text-xs text-gray-500 italic">${escapeHtml(r.reason)}</div>` : ''}
-                     </div>`
-                )
-                .join('')
-        }
-      </div>
-
-      <h2 class="font-bold mb-2">${escapeHtml(t(locale, 'detail.deep_analysis'))}</h2>
-      ${renderDeepAnalysisSection(u.id, locale, consentState, currentConfig.llm.enabled, analyzeEnabled, deepAnalyses)}`;
+      </details>`;
     reply.type('text/html; charset=utf-8').send(
       layout(t(locale, 'detail.title'), body, locale, {
         reqPath: `/prompts/${u.id}`,
@@ -809,15 +965,13 @@ think-prompt coach on</pre>
            (SELECT COUNT(*) FROM prompt_usages) AS usages,
            (SELECT COUNT(*) FROM sessions) AS sessions,
            (SELECT COUNT(*) FROM quality_scores) AS scores,
-           (SELECT COUNT(*) FROM rule_hits) AS hits,
-           (SELECT COUNT(*) FROM rewrites) AS rewrites`
+           (SELECT COUNT(*) FROM rule_hits) AS hits`
       )
       .get() as {
       usages: number;
       sessions: number;
       scores: number;
       hits: number;
-      rewrites: number;
     };
     const body = `
       <h1 class="text-2xl font-bold mb-4">${escapeHtml(t(locale, 'doctor.title'))}</h1>
@@ -828,7 +982,6 @@ think-prompt coach on</pre>
           <li>sessions: ${counts.sessions}</li>
           <li>quality_scores: ${counts.scores}</li>
           <li>rule_hits: ${counts.hits}</li>
-          <li>rewrites: ${counts.rewrites}</li>
         </ul>
       </div>
       <div class="bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm p-4">

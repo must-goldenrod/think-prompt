@@ -22,12 +22,6 @@ interface RuleHitRow {
   severity: number;
   message: string;
 }
-interface RewriteRow {
-  status: string;
-  after_text: string;
-  reason: string | null;
-}
-
 type DbHandle = ReturnType<typeof openDb>;
 
 function matchUsage(db: DbHandle, id: string): UsageRow | undefined {
@@ -52,9 +46,6 @@ export async function showCmd(id: string): Promise<void> {
   const hits = db
     .prepare(`SELECT * FROM rule_hits WHERE usage_id=? ORDER BY severity DESC`)
     .all(u.id) as RuleHitRow[];
-  const rewrite = db
-    .prepare(`SELECT * FROM rewrites WHERE usage_id=? ORDER BY created_at DESC LIMIT 1`)
-    .get(u.id) as RewriteRow | undefined;
 
   console.log(pc.bold(`Prompt ${u.id}`));
   console.log(`  session: ${u.session_id}`);
@@ -78,13 +69,6 @@ export async function showCmd(id: string): Promise<void> {
     for (const h of hits) {
       console.log(`  - ${pc.yellow(h.rule_id)} sev=${h.severity}: ${h.message}`);
     }
-  }
-  if (rewrite) {
-    console.log('');
-    console.log(pc.bold(`rewrite (${rewrite.status}):`));
-    console.log(pc.dim('─── proposed ───'));
-    console.log(rewrite.after_text);
-    if (rewrite.reason) console.log(pc.dim(`reason: ${rewrite.reason}`));
   }
   db.close();
 }
