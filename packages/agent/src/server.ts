@@ -432,7 +432,8 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
       .prepare(
         `SELECT pu.id, pu.session_id, pu.pii_masked AS prompt, pu.char_len, pu.word_count,
                 pu.created_at, pu.turn_index,
-                qs.final_score, qs.rule_score, qs.usage_score, qs.tier
+                qs.final_score, qs.rule_score, qs.usage_score, qs.tier,
+                qs.efficiency_score, qs.confidence, qs.baseline_delta
          FROM prompt_usages pu
          LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
          ${where}
@@ -451,6 +452,9 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
       rule_score: number | null;
       usage_score: number | null;
       tier: string | null;
+      efficiency_score: number | null;
+      confidence: string | null;
+      baseline_delta: number | null;
     }>;
     return { prompts: rows };
   });
@@ -462,7 +466,8 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
         `SELECT pu.id, pu.session_id, pu.pii_masked AS prompt, pu.char_len, pu.word_count,
                 pu.created_at, pu.turn_index, pu.coach_context,
                 qs.final_score, qs.rule_score, qs.usage_score, qs.judge_score, qs.tier,
-                qs.computed_at, qs.rules_version
+                qs.computed_at, qs.rules_version,
+                qs.efficiency_score, qs.confidence, qs.baseline_delta
          FROM prompt_usages pu
          LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
          WHERE pu.id = ? OR pu.id LIKE ? || '%'
@@ -485,6 +490,9 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
           tier: string | null;
           computed_at: string | null;
           rules_version: number | null;
+          efficiency_score: number | null;
+          confidence: string | null;
+          baseline_delta: number | null;
         }
       | undefined;
     if (!row) {
@@ -560,7 +568,7 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
     const prompts = db
       .prepare(
         `SELECT pu.id, pu.pii_masked AS prompt, pu.created_at, pu.turn_index,
-                qs.final_score, qs.tier
+                qs.final_score, qs.tier, qs.confidence, qs.baseline_delta
          FROM prompt_usages pu
          LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
          WHERE pu.session_id = ?
@@ -573,6 +581,8 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
       turn_index: number;
       final_score: number | null;
       tier: string | null;
+      confidence: string | null;
+      baseline_delta: number | null;
     }>;
     return { session, prompts };
   });

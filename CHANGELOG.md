@@ -12,6 +12,36 @@ _No unreleased changes._
 
 ---
 
+## [0.6.0] — 2026-05-12
+
+Embed-mode follow-up: the agent JSON API (added in D-047/0.5.0 carry) now
+surfaces D-046's 4-tuple fields so external dashboards (e.g. claude-alive)
+can render the same confidence / efficiency / baseline-delta signals the
+local dashboard already shows.
+
+### Added
+- **`/api/prompts`** and **`/api/prompts/:id`** now return three new
+  columns from `quality_scores`:
+  - `efficiency_score` — Phase 1 efficiency axis (`number | null`)
+  - `confidence` — D-046 confidence band (`'high' | 'medium' | 'low' | null`)
+  - `baseline_delta` — `final_score - user_baseline` once calibrated
+    (`number | null`)
+- **`/api/sessions/:id` prompt rows** also include `confidence` and
+  `baseline_delta` so list-style embeds can render a tier badge with the
+  same "참고용" / calibration hint the dashboard uses.
+- All response fields remain nullable and stay aligned with D-046's
+  philosophy: `confidence === 'low'` is a feature, not an error.
+
+### Unchanged
+- No schema migration — `MIGRATION_006` (0.5.0) already added these
+  columns. Older databases without those columns return `null`, which
+  embedders interpret as "calibrating…".
+- No new endpoints. No write paths touched. Hook contract unchanged.
+- D-004 (local-first) and D-028 (fail-open) still apply: only PII-masked
+  text is exposed, agent stays `127.0.0.1`-bound, JSON failures are caught.
+
+---
+
 ## [0.5.0] — 2026-04-24
 
 Two-stage learning loop release: **per-prompt inline hints** on the
