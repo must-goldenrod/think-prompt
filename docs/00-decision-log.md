@@ -549,6 +549,36 @@
 
 ---
 
+## D-048 · claude-alive 로 흡수, 본 리포 archive
+
+- **Date:** 2026-05-12
+- **Context:** D-047 이후 claude-alive 의 React Prompt 탭이 자체 dashboard 패키지를 사실상 대체했다. 두 리포가 동일한 사용자(Claude Code 개발자) + 동일한 머신을 타겟으로 하면서 두 D-결정 로그·두 CHANGELOG·두 CI 를 유지하는 비용이 정당화되지 않음. npm 라이프타임 다운로드 248회 (출시일 외 일평균 1~2) 기준으로 외부 사용자 사실상 0 확인.
+- **Decision:** 5개 패키지(core, rules, agent, worker, cli)를 claude-alive 모노레포 `packages/prompt-{name}/` 으로 이전, dashboard 패키지는 폐기. think-prompt 리포는 archive (read-only) 처리. `think-prompt` npm 패키지는 deprecate ("absorbed into claude-alive" 메시지).
+- **Migration:**
+  - 모노레포 내부 import 경로 (`@think-prompt/core` 등)는 **그대로 유지** — claude-alive 안의 workspace 패키지 이름과 동일. 코드 import 0 변경.
+  - `packages/cli` 의 패키지명 `think-prompt` → `@think-prompt/cli-internal` (workspace-only). `bin` 필드 제거 — 사용자가 쓰는 CLI 는 이제 `claude-alive`.
+  - 사용자 데이터 (`~/.think-prompt/` SQLite + queue.jsonl) 경로 무변. 기존 설치자는 `claude-alive install` 후 그대로 데이터 호환.
+- **D-원칙 보존:**
+  - **D-028 fail-open** — agent 의 150ms 훅 예산·silent return 정책 그대로. claude-alive 의 CLI 가 throw 해도 agent/worker 는 분리된 데몬으로 계속 실행.
+  - **D-004 local-first** — 127.0.0.1 바인드 + PII 마스킹본만 노출. claude-alive UI 는 agent 의 JSON API 만 소비.
+  - **D-005 prompts vs prompt_usages 분리** — 스키마 무변.
+  - **D-012 (대시보드 번들러 없음)** — claude-alive UI 는 별도로 Vite + React 기반이라 이 결정은 dashboard 패키지와 함께 폐기. 새 stack 은 claude-alive 의 자체 D-결정으로 관리.
+- **Alternatives considered:**
+  - A. dashboard 패키지만 deprecate, 나머지 think-prompt 유지 — 두 리포 유지 비용 그대로. 반려.
+  - C. 전체 unpublish (npm 에서 패키지 제거) — npm 보호 정책상 72시간 지나 불가. 가능하더라도 248명 한 명이라도 보호.
+  - D. claude-alive 도 think-prompt 로 흡수 (역 방향) — 사용자가 보는 1st-class 표면이 시각화(claude-alive) 라 그 쪽이 brand. 반려.
+- **Scope:**
+  - 본 리포: README → archive 안내, `docs/00-decision-log.md` 에 D-048 추가, GitHub 측에서 archive flag on.
+  - claude-alive: PR #17 (5 패키지 이전 + dashboard role 제거 + claude-alive CLI 의 shell-out → workspace import 전환). 머지 완료.
+- **관계:** D-047(임베드 모드 + JSON API) — 이 결정이 D-048 의 전제. D-047 이후 dashboard 가 dispensable 해짐. D-038(dashboard 브랜드 정렬), D-039 / D-040 / D-043 / D-044(dashboard UX 결정들) — 모두 dashboard 패키지와 함께 effective scope 종료. 결정 자체는 보존 (역사적 기록).
+
+### 본 리포 상태
+- **GitHub:** archived (issues / PR 차단, 코드 read-only)
+- **npm:** `think-prompt@*` deprecated → "absorbed into claude-alive; install `claude-alive` instead"
+- **대체:** https://github.com/must-goldenrod/claude-alive
+
+---
+
 ## 취소된 결정
 
 ### D-006 · 품질 스코어 구성 (룰 70% + 실사용 30%, LLM 심판 `rule_score < 60`)
