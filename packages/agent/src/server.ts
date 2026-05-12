@@ -400,6 +400,183 @@ export function buildAgentServer(deps: AgentDeps = {}): FastifyInstance {
     }
   });
 
+  // ---------------------------------------------------------------------
+  // JSON API for embedders (e.g. claude-alive's React UI).
+  //
+  // These are read-only projections of the same data the local dashboard
+  // (`packages/dashboard`) renders as HTML. The dashboard remains the
+  // primary UI for standalone users; these routes exist so the data can be
+  // surfaced inside a host UI that already runs alongside the agent.
+  //
+  // The agent is the source of truth and the only process with a write
+  // handle to the DB — embedders MUST go through these routes rather than
+  // opening the SQLite file directly (avoids WAL contention, lets us
+  // version the response shape, keeps PII masking decisions centralized).
+  // ---------------------------------------------------------------------
+
+  fastify.get('/api/prompts', async (req) => {
+    const q = req.query as { limit?: string; tier?: string; session_id?: string };
+    const limit = Math.min(Math.max(Number.parseInt(q.limit ?? '50', 10) || 50, 1), 500);
+    const conds: string[] = [];
+    const params: Record<string, string> = {};
+    if (q.tier) {
+      conds.push('qs.tier = @tier');
+      params.tier = q.tier;
+    }
+    if (q.session_id) {
+      conds.push('pu.session_id = @session_id');
+      params.session_id = q.session_id;
+    }
+    const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
+    const rows = db
+      .prepare(
+        `SELECT pu.id, pu.session_id, pu.pii_masked AS prompt, pu.char_len, pu.word_count,
+                pu.created_at, pu.turn_index,
+                qs.final_score, qs.rule_score, qs.usage_score, qs.tier
+         FROM prompt_usages pu
+         LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
+         ${where}
+         ORDER BY pu.created_at DESC
+         LIMIT ${limit}`
+      )
+      .all(params) as Array<{
+      id: string;
+      session_id: string;
+      prompt: string;
+      char_len: number;
+      word_count: number;
+      created_at: string;
+      turn_index: number;
+      final_score: number | null;
+      rule_score: number | null;
+      usage_score: number | null;
+      tier: string | null;
+    }>;
+    return { prompts: rows };
+  });
+
+  fastify.get('/api/prompts/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const row = db
+      .prepare(
+        `SELECT pu.id, pu.session_id, pu.pii_masked AS prompt, pu.char_len, pu.word_count,
+                pu.created_at, pu.turn_index, pu.coach_context,
+                qs.final_score, qs.rule_score, qs.usage_score, qs.judge_score, qs.tier,
+                qs.computed_at, qs.rules_version
+         FROM prompt_usages pu
+         LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
+         WHERE pu.id = ? OR pu.id LIKE ? || '%'
+         LIMIT 1`
+      )
+      .get(id, id) as
+      | {
+          id: string;
+          session_id: string;
+          prompt: string;
+          char_len: number;
+          word_count: number;
+          created_at: string;
+          turn_index: number;
+          coach_context: string | null;
+          final_score: number | null;
+          rule_score: number | null;
+          usage_score: number | null;
+          judge_score: number | null;
+          tier: string | null;
+          computed_at: string | null;
+          rules_version: number | null;
+        }
+      | undefined;
+    if (!row) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    const hits = db
+      .prepare(
+        `SELECT rule_id, severity, message, evidence
+         FROM rule_hits WHERE usage_id = ? ORDER BY severity DESC, rule_id`
+      )
+      .all(row.id) as Array<{
+      rule_id: string;
+      severity: number;
+      message: string;
+      evidence: string | null;
+    }>;
+    return { prompt: row, hits };
+  });
+
+  fastify.get('/api/sessions', async (req) => {
+    const q = req.query as { limit?: string };
+    const limit = Math.min(Math.max(Number.parseInt(q.limit ?? '50', 10) || 50, 1), 500);
+    const rows = db
+      .prepare(
+        `SELECT s.id, s.cwd, s.model, s.source, s.started_at, s.ended_at, s.stop_count,
+                COUNT(pu.id) AS prompt_count,
+                AVG(qs.final_score) AS avg_score
+         FROM sessions s
+         LEFT JOIN prompt_usages pu ON pu.session_id = s.id
+         LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
+         GROUP BY s.id
+         ORDER BY s.started_at DESC
+         LIMIT ${limit}`
+      )
+      .all() as Array<{
+      id: string;
+      cwd: string;
+      model: string | null;
+      source: string | null;
+      started_at: string;
+      ended_at: string | null;
+      stop_count: number;
+      prompt_count: number;
+      avg_score: number | null;
+    }>;
+    return { sessions: rows };
+  });
+
+  fastify.get('/api/sessions/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const session = db
+      .prepare(
+        `SELECT id, cwd, model, source, started_at, ended_at, transcript_path, stop_count
+         FROM sessions WHERE id = ?`
+      )
+      .get(id) as
+      | {
+          id: string;
+          cwd: string;
+          model: string | null;
+          source: string | null;
+          started_at: string;
+          ended_at: string | null;
+          transcript_path: string | null;
+          stop_count: number;
+        }
+      | undefined;
+    if (!session) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    const prompts = db
+      .prepare(
+        `SELECT pu.id, pu.pii_masked AS prompt, pu.created_at, pu.turn_index,
+                qs.final_score, qs.tier
+         FROM prompt_usages pu
+         LEFT JOIN quality_scores qs ON qs.usage_id = pu.id
+         WHERE pu.session_id = ?
+         ORDER BY pu.turn_index ASC`
+      )
+      .all(id) as Array<{
+      id: string;
+      prompt: string;
+      created_at: string;
+      turn_index: number;
+      final_score: number | null;
+      tier: string | null;
+    }>;
+    return { session, prompts };
+  });
+
   fastify.addHook('onClose', async () => {
     try {
       db.close();

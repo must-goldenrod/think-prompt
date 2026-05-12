@@ -25,13 +25,30 @@ program
   .description('Claude Code prompt collector + quality coach (local-first)')
   .version('0.1.0');
 
-program.command('install').description('install hooks + start daemons').action(installCmd);
+program
+  .command('install')
+  .description('install hooks + start daemons')
+  .option(
+    '--no-dashboard',
+    'skip the dashboard daemon (agent + worker only) — for embedders like claude-alive'
+  )
+  .action((opts: { dashboard?: boolean }) => {
+    const installOpts: { dashboard?: boolean } = {};
+    if (opts.dashboard !== undefined) installOpts.dashboard = opts.dashboard;
+    return installCmd(installOpts);
+  });
 
 program
   .command('uninstall')
   .description('remove hooks + stop daemons (data preserved unless --purge)')
   .option('--purge', 'also delete ~/.think-prompt/')
-  .action(uninstallCmd);
+  .option('--no-dashboard', 'do not attempt to stop the dashboard daemon')
+  .action((opts: { purge?: boolean; dashboard?: boolean }) => {
+    const uninstallOpts: { purge?: boolean; dashboard?: boolean } = {};
+    if (opts.purge !== undefined) uninstallOpts.purge = opts.purge;
+    if (opts.dashboard !== undefined) uninstallOpts.dashboard = opts.dashboard;
+    return uninstallCmd(uninstallOpts);
+  });
 
 program.command('start').description('start agent + worker daemons').action(startCmd);
 program.command('stop').description('stop agent + worker daemons').action(stopCmd);

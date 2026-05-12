@@ -1,9 +1,23 @@
 import { getPaths, loadConfig, openDb } from '@think-prompt/core';
 import pc from 'picocolors';
-import { start } from '../daemon.js';
+import { type Role, start } from '../daemon.js';
 import { mergeHooksIntoSettings } from '../settings-merge.js';
 
-export async function installCmd(): Promise<void> {
+export interface InstallOptions {
+  /** When false, skip the dashboard daemon — caller embeds the dashboard elsewhere (e.g. claude-alive React UI). */
+  dashboard?: boolean;
+}
+
+/**
+ * Programmatic + CLI install entry. Initializes the DB, merges hooks into Claude
+ * settings.json, and starts the requested daemons.
+ *
+ * `--no-dashboard` (CLI) → `{ dashboard: false }` (programmatic). When set, only
+ * agent + worker spawn — the dashboard package isn't installed. Used when an
+ * external UI (claude-alive) renders the dashboard surface from the same data.
+ */
+export async function installCmd(opts: InstallOptions = {}): Promise<void> {
+  const withDashboard = opts.dashboard !== false;
   const paths = getPaths();
   const config = loadConfig();
   // Initialize DB & config
@@ -16,21 +30,25 @@ export async function installCmd(): Promise<void> {
   } else {
     console.log(pc.dim('• Claude settings already up to date'));
   }
-  const agent = start('agent');
-  const worker = start('worker');
-  const dashboard = start('dashboard');
-  console.log(
-    (agent.running ? pc.green('✓') : pc.red('✗')) +
-      ` agent ${agent.running ? 'running' : 'failed'} (pid ${agent.pid ?? '-'}, :${config.agent.port})`
-  );
-  console.log(
-    (worker.running ? pc.green('✓') : pc.red('✗')) +
-      ` worker ${worker.running ? 'running' : 'failed'} (pid ${worker.pid ?? '-'})`
-  );
-  console.log(
-    (dashboard.running ? pc.green('✓') : pc.red('✗')) +
-      ` dashboard ${dashboard.running ? 'running' : 'failed'} (pid ${dashboard.pid ?? '-'}, :${config.dashboard.port})`
-  );
+  const rolesToStart: Role[] = withDashboard
+    ? ['agent', 'worker', 'dashboard']
+    : ['agent', 'worker'];
+  for (const role of rolesToStart) {
+    const s = start(role);
+    const port =
+      role === 'agent'
+        ? `, :${config.agent.port}`
+        : role === 'dashboard'
+          ? `, :${config.dashboard.port}`
+          : '';
+    console.log(
+      (s.running ? pc.green('✓') : pc.red('✗')) +
+        ` ${role} ${s.running ? 'running' : 'failed'} (pid ${s.pid ?? '-'}${port})`
+    );
+  }
+  if (!withDashboard) {
+    console.log(pc.dim('• dashboard daemon skipped (--no-dashboard) — external UI expected'));
+  }
   console.log(
     '\n' +
       pc.bold('Next:') +

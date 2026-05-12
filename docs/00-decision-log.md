@@ -528,6 +528,27 @@
 
 ---
 
+## D-047 · 임베드 모드: `install --no-dashboard` + agent JSON API
+
+- **Date:** 2026-05-12
+- **Problem:** `claude-alive` (실시간 에이전트 시각화 도구)와 같은 사용자를 공유하는데, 두 도구의 대시보드가 별개 포트(47824 / 3141)로 떠 있어 "한 제품"이라는 느낌이 없었다. 사용자가 claude-alive UI 안에서 think-prompt 데이터(프롬프트 목록·스코어·룰 hit)도 같이 보고 싶어 함.
+- **Decision:** think-prompt의 핵심(agent 47823 + worker + DB)은 그대로 두고, **두 가지 임베드 후크를 추가**한다:
+  1. `think-prompt install --no-dashboard` (uninstall도 대칭) — dashboard 데몬을 띄우지 않음. agent + worker만 기동. 데이터/캡처 경로는 무변.
+  2. agent 서버에 read-only JSON API 추가: `GET /api/prompts`, `GET /api/prompts/:id`, `GET /api/sessions`, `GET /api/sessions/:id`. PII 마스킹된 `pii_masked` 컬럼만 반환하며 원문(`prompt_text`)은 응답에 포함하지 않음(D-004).
+- **Rationale:**
+  - **D-028 fail-open 보존** — agent/worker는 그대로. dashboard 패키지를 옵션화한 것이 전부. 임베드 호스트가 죽어도 Tier 1 캡처는 무관.
+  - **D-004 로컬 우선 보존** — JSON 라우트는 `127.0.0.1`에 바인드된 기존 agent에 추가됨. 외부 트래픽 노출 없음. 원문 텍스트 미포함.
+  - **D-005 prompts vs prompt_usages 분리 보존** — JSON 응답은 `prompt_usages` + `quality_scores` + `rule_hits` 조인만. `prompts`(템플릿) 테이블은 노출하지 않음(별도 결정 필요).
+  - **dashboard 패키지는 archive하지 않음** — 표준 사용자는 여전히 `:47824`에서 사용 가능. claude-alive 임베드는 *추가* 옵션.
+- **Alternatives considered:**
+  - ② claude-alive가 `~/.think-prompt/prompts.db`를 직접 read-only 오픈 — better-sqlite3 두 핸들 + WAL 동시 접근은 가능하지만, 스키마 변경 시 양쪽 동기화 부담. 반려.
+  - ③ dashboard 자체를 claude-alive로 흡수(C 옵션) — Tier 분리·fail-open 격리가 흐려질 위험. 현재 단계에서는 과한 변경.
+  - ④ 별도 임베드 전용 패키지 신설 — agent와 같은 DB에 접근해야 해서 중복 책임. 반려.
+- **Scope:** `packages/cli/src/commands/install.ts`·`uninstall.ts`·`index.ts` 옵션 추가, `packages/agent/src/server.ts` 4개 GET 라우트. dashboard 패키지·browser-extension·rules·core는 스코프 외.
+- **관계:** D-028(fail-open) — agent/worker 격리 보존 · D-004(로컬 우선) — 마스킹본만 노출 · D-012(번들러 없음) — dashboard는 그대로 · D-034(npm 단일 번들) — `think-prompt` 바이너리는 동일, 새 플래그만 추가 · D-046(4-tuple 계약) — JSON API 응답에 confidence/delta 필드를 포함시키는 건 후속 PR (이번엔 기존 final_score/tier만 노출).
+
+---
+
 ## 취소된 결정
 
 ### D-006 · 품질 스코어 구성 (룰 70% + 실사용 30%, LLM 심판 `rule_score < 60`)
